@@ -22,9 +22,9 @@ int gpioInitialize(void)
 	__gpiodev_props_dev.val = (uint8_t *) malloc (NUM_GPIO_PINS * sizeof(uint8_t));
 	__gpiodev_props_dev.mode = (uint8_t *) malloc (NUM_GPIO_PINS * sizeof(uint8_t));
 
-	__gpiodev_pins_dev.fd = (int *)&(__gpiodev_props_dev.fd_val); // copy the value file descriptor array for access by gpioRead/gpioWrite
-	__gpiodev_pins_dev.mode = (uint8_t *)&(__gpiodev_props_dev.mode);
-	__gpiodev_pins_dev.val = (uint8_t *)&(__gpiodev_props_dev.val);
+	__gpiodev_pins_dev.fd = __gpiodev_props_dev.fd_val; // copy the value file descriptor array for access by gpioRead/gpioWrite
+	__gpiodev_pins_dev.mode = (__gpiodev_props_dev.mode);
+	__gpiodev_pins_dev.val = (__gpiodev_props_dev.val);
 	for (int i = 0; i < NUM_GPIO_PINS; i++) // indicate all pins are uninitialized
 	{
 		__gpiodev_props_dev.fd_mode[i] = -1;
@@ -45,6 +45,7 @@ int gpioInitialize(void)
 		return -1;
 	}
 	__gpiodev_props_dev.fd_unexport = fd;
+    __gpiodev_gpio_initd = 1;
 	return 1;
 }
 
@@ -55,7 +56,7 @@ static int GPIOExport(int pin)
 	ssize_t bytes_written;
 
 	bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
-	write(__gpiodev_props_dev.fd_export, buffer, bytes_written);
+	bytes_written = write(__gpiodev_props_dev.fd_export, buffer, bytes_written);
 	return (0);
 }
 
@@ -137,7 +138,6 @@ int gpioSetMode(int pin, int mode)
 
 int gpioRead(int pin)
 {
-
 	char value_str[3];
 
 	if (read(__gpiodev_pins_dev.fd[pin], value_str, 3) == -1)
@@ -145,7 +145,6 @@ int gpioRead(int pin)
 		fprintf(stderr, RED "Failed to read value from pin %d!\n" CLR, pin);
 		return (-1);
 	}
-
 	return (atoi(value_str));
 }
 

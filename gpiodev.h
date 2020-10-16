@@ -31,7 +31,7 @@
  * @brief GPIO look up table for easy access. Currently mapped to Raspberry Pi
  * system. The indices map the BCM pins to physical pins
  */
-int __gpiodev_gpio_lut_pins[] = {
+int __gpiodev_gpio_lut_pins[] = {-1,
     -1, // Pin 1, 3V3
     -1, // Pin 2, 5V
     -1, // Pin 3, I2C1 SDA

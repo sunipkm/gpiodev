@@ -26,7 +26,7 @@
 #define GPIO_INOUT 2
 #define GPIO_FNAME_MAX_LEN 256
 
-#ifndef GPIODEV_EXTERN_H
+#ifdef GPIODEV_INTERNAL
 /**
  * @brief GPIO look up table for easy access. Currently mapped to Raspberry Pi
  * system. The indices map the BCM pins to physical pins
@@ -86,10 +86,10 @@ const int NUM_GPIO_PINS = sizeof(__gpiodev_gpio_lut_pins) / sizeof(int);
  */
 typedef struct
 {
-    int fd_val[NUM_GPIO_PINS];   /// File descriptors containing the GPIO inout values
-    uint8_t mode[NUM_GPIO_PINS]; /// I/O modes of the GPIO pin, can assume values GPIO_IN, GPIO_OUT and GPIO_INOUT
-    uint8_t val[NUM_GPIO_PINS];  /// Last read/set value of the GPIO pin
-    int fd_mode[NUM_GPIO_PINS];  /// File descriptors to IO modes of the GPIO pins
+    int *fd_val;   /// File descriptors containing the GPIO inout values
+    uint8_t *mode; /// I/O modes of the GPIO pin, can assume values GPIO_IN, GPIO_OUT and GPIO_INOUT
+    uint8_t *val;  /// Last read/set value of the GPIO pin
+    int *fd_mode;  /// File descriptors to IO modes of the GPIO pins
     int fd_export;               /// File descriptor for GPIO export
     int fd_unexport;             /// File descriptor for GPIO unexport
 } gpioprops;
@@ -104,7 +104,7 @@ typedef struct
     uint8_t *val;  /// Value of last read/set values
     uint8_t *mode; /// Mode of the GPIO pin
 } gpiopins;
-#endif // GPIODEV_EXTERN_H
+#endif // GPIODEV_INTERNAL
 
 /**
  * @brief Initialize GPIO sysfs subsystem. Must be called before calling gpioSetMode().

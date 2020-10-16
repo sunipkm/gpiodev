@@ -3,14 +3,25 @@
 #include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
-#include <gpiodev.h>
+#include <stdlib.h>
+#define GPIODEV_INTERNAL
+#include "gpiodev.h"
+#undef GPIODEV_INTERNAL
 #include <macros.h>
 
 gpioprops __gpiodev_props_dev; /// Memory allocation for the GPIO properties struct
 gpiopins __gpiodev_pins_dev;   /// Memory allocation for the GPIO pins struct
 
+int __gpiodev_gpio_initd = 0; /// Default: Uninitialized
+
 int gpioInitialize(void)
 {
+	// memory allocations
+	__gpiodev_props_dev.fd_val = (int *) malloc (NUM_GPIO_PINS * sizeof(int));
+	__gpiodev_props_dev.fd_mode = (int *) malloc (NUM_GPIO_PINS * sizeof(int));
+	__gpiodev_props_dev.val = (uint8_t *) malloc (NUM_GPIO_PINS * sizeof(uint8_t));
+	__gpiodev_props_dev.mode = (uint8_t *) malloc (NUM_GPIO_PINS * sizeof(uint8_t));
+
 	__gpiodev_pins_dev.fd = (int *)&(__gpiodev_props_dev.fd_val); // copy the value file descriptor array for access by gpioRead/gpioWrite
 	__gpiodev_pins_dev.mode = (uint8_t *)&(__gpiodev_props_dev.mode);
 	__gpiodev_pins_dev.val = (uint8_t *)&(__gpiodev_props_dev.val);
@@ -59,6 +70,12 @@ static int GPIOUnexport(int pin)
 
 int gpioSetMode(int pin, int mode)
 {
+	if (__gpiodev_gpio_initd == 0) // GPIO uninitialized
+	{
+		if (gpioInitialize() < 0)
+			return -1;
+		__gpiodev_gpio_initd = 1; // Indicate that GPIO has been initialized
+	}
 	int bcmpin = __gpiodev_gpio_lut_pins[pin];
 	if (bcmpin < 0)
 	{
@@ -75,14 +92,17 @@ int gpioSetMode(int pin, int mode)
 		char path[256];
 		int fd;
 
-		snprintf(path, 256, "/sys/class/gpio/gpio%d/direction", bcmpin); // Direction fd
-		fd = open(path, O_WRONLY);
-		if (fd == -1)
+		if (__gpiodev_props_dev.fd_mode[pin] < 0) // pin mode uninitialized
 		{
-			fprintf(stderr, RED "Failed to open gpio direction for writing: %s\n" CLR, path);
-			return (-1);
+			snprintf(path, 256, "/sys/class/gpio/gpio%d/direction", bcmpin); // Direction fd
+			fd = open(path, O_WRONLY);
+			if (fd == -1)
+			{
+				fprintf(stderr, RED "Failed to open gpio direction for writing: %s\n" CLR, path);
+				return (-1);
+			}
+			__gpiodev_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
 		}
-		__gpiodev_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
 		char modestr[] = "in\0out";
 		if (write(fd, &modestr[mode == GPIO_IN ? 0 : 3], mode == GPIO_IN ? 2 : 3) == -1)
 		{
@@ -91,14 +111,17 @@ int gpioSetMode(int pin, int mode)
 		}
 
 		// open file for value access
-		snprintf(path, 256, "/sys/class/gpio/gpio%d/value", bcmpin);
-		fd = open(path, mode == GPIO_IN ? O_RDONLY : O_WRONLY); // Open as read/write depending on mode
-		if (fd == -1)
+		if (__gpiodev_props_dev.fd_val[pin] < 0)
 		{
-			fprintf(stderr, RED "Failed to open gpio value for read/write: %s\n" CLR, path);
-			return (-1);
+			snprintf(path, 256, "/sys/class/gpio/gpio%d/value", bcmpin);
+			fd = open(path, mode == GPIO_IN ? O_RDONLY : O_WRONLY); // Open as read/write depending on mode
+			if (fd == -1)
+			{
+				fprintf(stderr, RED "Failed to open gpio value for read/write: %s\n" CLR, path);
+				return (-1);
+			}
+			__gpiodev_props_dev.fd_val[pin] = fd;
 		}
-		__gpiodev_props_dev.fd_val[pin] = fd;
 		if (mode == GPIO_OUT)
 		{
 			__gpiodev_props_dev.val[pin] = GPIO_LOW;
@@ -151,5 +174,9 @@ void gpioDestroy(void)
 	}
 	close(__gpiodev_props_dev.fd_export);
 	close(__gpiodev_props_dev.fd_unexport);
+	free(__gpiodev_props_dev.fd_val);
+	free(__gpiodev_props_dev.fd_mode);
+	free(__gpiodev_props_dev.val);
+	free(__gpiodev_props_dev.mode);
 	return;
 }

@@ -34,14 +34,14 @@ int gpioInitialize(void)
 	fd = open("/sys/class/gpio/export", O_WRONLY);
 	if (fd == -1)
 	{
-		fprintf(stderr, RED "Failed to open export for writing.\n" CLR);
+		fprintf(stderr, RED "%s: %s -> Failed to open export for writing.\n" CLR, __func__, "/sys/class/gpio/export");
 		return -1;
 	}
 	__gpiodev_props_dev.fd_export = fd;
 	fd = open("/sys/class/gpio/unexport", O_WRONLY);
 	if (fd == -1)
 	{
-		fprintf(stderr, RED "Failed to open unexport for writing.\n" CLR);
+		fprintf(stderr, RED "%s: %s -> Failed to open unexport for writing.\n" CLR, __func__, "/sys/class/gpio/unexport");
 		return -1;
 	}
 	__gpiodev_props_dev.fd_unexport = fd;
@@ -99,7 +99,7 @@ int gpioSetMode(int pin, int mode)
 			fd = open(path, O_WRONLY);
 			if (fd == -1)
 			{
-				fprintf(stderr, RED "Failed to open gpio direction for writing: %s\n" CLR, path);
+				fprintf(stderr, RED "%s: Failed to open gpio %d direction for writing: %s\n" CLR, __func__, bcmpin, path);
 				return (-1);
 			}
 			__gpiodev_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
@@ -107,7 +107,7 @@ int gpioSetMode(int pin, int mode)
 		char modestr[] = "in\0out";
 		if (write(fd, &modestr[mode == GPIO_IN ? 0 : 3], mode == GPIO_IN ? 2 : 3) == -1)
 		{
-			fprintf(stderr, "Failed to set direction for pin %d!\n", pin);
+			fprintf(stderr, "%s: Failed to set direction for pin %d!\n", __func__, bcmpin);
 			return (-1);
 		}
 
@@ -118,7 +118,7 @@ int gpioSetMode(int pin, int mode)
 			fd = open(path, mode == GPIO_IN ? O_RDONLY : O_WRONLY); // Open as read/write depending on mode
 			if (fd == -1)
 			{
-				fprintf(stderr, RED "Failed to open gpio value for read/write: %s\n" CLR, path);
+				fprintf(stderr, RED "%s: Failed to open gpio value for read/write: %s\n" CLR, __func__, path);
 				return (-1);
 			}
 			__gpiodev_props_dev.fd_val[pin] = fd;
@@ -142,7 +142,7 @@ int gpioRead(int pin)
 
 	if (read(__gpiodev_pins_dev.fd[pin], value_str, 3) == -1)
 	{
-		fprintf(stderr, RED "Failed to read value from pin %d!\n" CLR, pin);
+		fprintf(stderr, RED "%s: Failed to read value from pin %d!\n" CLR, __func__, pin);
 		return (-1);
 	}
 	return (atoi(value_str));
@@ -154,7 +154,7 @@ int gpioWrite(int pin, int value)
 
 	if (1 != write(__gpiodev_pins_dev.fd[pin], &s_values_str[GPIO_LOW == value ? 0 : 1], 1))
 	{
-		fprintf(stderr, "Failed to write value!\n");
+		fprintf(stderr, "%s: Failed to write value to %d!\n", __func__, pin);
 		return (-1);
 	}
 	return (0);

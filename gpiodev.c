@@ -139,7 +139,7 @@ int gpioSetMode(int pin, int mode)
 int gpioRead(int pin)
 {
 	char value_str[3];
-
+    lseek(__gpiodev_pins_dev.fd[pin], 0, SEEK_SET);
 	if (read(__gpiodev_pins_dev.fd[pin], value_str, 3) == -1)
 	{
 		fprintf(stderr, RED "%s: Failed to read value from pin %d!\n" CLR, __func__, pin);

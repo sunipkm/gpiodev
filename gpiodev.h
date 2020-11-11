@@ -15,7 +15,6 @@
 #ifndef SH_GPIODEV_H
 #define SH_GPIODEV_H
 
-#include <macros.h>
 #include <stdint.h>
 #include <pthread.h>
 

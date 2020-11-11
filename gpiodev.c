@@ -34,14 +34,14 @@ int gpioInitialize(void)
 	fd = open("/sys/class/gpio/export", O_WRONLY);
 	if (fd == -1)
 	{
-		fprintf(stderr, RED "%s: %s -> Failed to open export for writing.\n" CLR, __func__, "/sys/class/gpio/export");
+		fprintf(stderr, "%s: %s -> Failed to open export for writing.\n", __func__, "/sys/class/gpio/export");
 		return -1;
 	}
 	__gpiodev_props_dev.fd_export = fd;
 	fd = open("/sys/class/gpio/unexport", O_WRONLY);
 	if (fd == -1)
 	{
-		fprintf(stderr, RED "%s: %s -> Failed to open unexport for writing.\n" CLR, __func__, "/sys/class/gpio/unexport");
+		fprintf(stderr, "%s: %s -> Failed to open unexport for writing.\n", __func__, "/sys/class/gpio/unexport");
 		return -1;
 	}
 	__gpiodev_props_dev.fd_unexport = fd;
@@ -80,13 +80,13 @@ int gpioSetMode(int pin, int mode)
 	int bcmpin = __gpiodev_gpio_lut_pins[pin];
 	if (bcmpin < 0)
 	{
-		fprintf(stderr, RED "GPIODEV: Error, pin %d is not available for GPIO operation.\n" CLR, pin);
+		fprintf(stderr, "GPIODEV: Error, pin %d is not available for GPIO operation.\n", pin);
 		return -1;
 	}
 
 	if (mode != GPIO_IN && mode != GPIO_OUT)
 	{
-		fprintf(stderr, RED "GPIODEV: Error, mode is not GPIO_IN or GPIO_OUT for pin %d.\n" CLR, pin);
+		fprintf(stderr, "GPIODEV: Error, mode is not GPIO_IN or GPIO_OUT for pin %d.\n", pin);
 	}
 	if (!GPIOExport(bcmpin)) // pin export successful
 	{
@@ -99,7 +99,7 @@ int gpioSetMode(int pin, int mode)
 			fd = open(path, O_WRONLY);
 			if (fd == -1)
 			{
-				fprintf(stderr, RED "%s: Failed to open gpio %d direction for writing: %s\n" CLR, __func__, bcmpin, path);
+				fprintf(stderr, "%s: Failed to open gpio %d direction for writing: %s\n", __func__, bcmpin, path);
 				return (-1);
 			}
 			__gpiodev_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
@@ -118,7 +118,7 @@ int gpioSetMode(int pin, int mode)
 			fd = open(path, mode == GPIO_IN ? O_RDONLY : O_WRONLY); // Open as read/write depending on mode
 			if (fd == -1)
 			{
-				fprintf(stderr, RED "%s: Failed to open gpio value for read/write: %s\n" CLR, __func__, path);
+				fprintf(stderr, "%s: Failed to open gpio value for read/write: %s\n", __func__, path);
 				return (-1);
 			}
 			__gpiodev_props_dev.fd_val[pin] = fd;
@@ -142,7 +142,7 @@ int gpioRead(int pin)
     lseek(__gpiodev_pins_dev.fd[pin], 0, SEEK_SET);
 	if (read(__gpiodev_pins_dev.fd[pin], value_str, 3) == -1)
 	{
-		fprintf(stderr, RED "%s: Failed to read value from pin %d!\n" CLR, __func__, pin);
+		fprintf(stderr, "%s: Failed to read value from pin %d!\n", __func__, pin);
 		return (-1);
 	}
 	return (atoi(value_str));

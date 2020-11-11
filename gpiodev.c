@@ -91,7 +91,7 @@ int gpioSetMode(int pin, int mode)
 	if (!GPIOExport(bcmpin)) // pin export successful
 	{
 		char path[256];
-		int fd;
+		int fd = -1;
 
 		if (__gpiodev_props_dev.fd_mode[pin] < 0) // pin mode uninitialized
 		{

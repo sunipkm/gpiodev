@@ -7,7 +7,6 @@
 #define GPIODEV_INTERNAL
 #include "gpiodev.h"
 #undef GPIODEV_INTERNAL
-#include <macros.h>
 
 gpioprops __gpiodev_props_dev; /// Memory allocation for the GPIO properties struct
 gpiopins __gpiodev_pins_dev;   /// Memory allocation for the GPIO pins struct

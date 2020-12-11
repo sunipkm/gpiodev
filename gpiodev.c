@@ -24,7 +24,7 @@ int gpioInitialize(void)
 	{
 		if (EWOULDBLOCK == errno) // another instance is running
 		{
-			fprintf("%s: Fatal error, another instance of software is running and trying to access gpiodev concurrently, aborting...\n", __func__);
+			fprintf(stderr, "%s: Fatal error, another instance of software is running and trying to access gpiodev concurrently, aborting...\n", __func__);
 			return -1;
 		}
 	}

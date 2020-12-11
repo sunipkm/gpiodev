@@ -4,6 +4,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <sys/file.h>
+#include <errno.h>
 #define GPIODEV_INTERNAL
 #include "gpiodev.h"
 #undef GPIODEV_INTERNAL
@@ -15,11 +17,22 @@ int __gpiodev_gpio_initd = 0; /// Default: Uninitialized
 
 int gpioInitialize(void)
 {
+	// allow only one instance of gpioInitialize()
+	int pid_file = open("/var/run/gpiodev.pid", O_CREAT | O_RDWR, 0666);
+	int rc = flock(pid_file, LOCK_EX | LOCK_NB);
+	if (rc)
+	{
+		if (EWOULDBLOCK == errno) // another instance is running
+		{
+			fprintf("%s: Fatal error, another instance of software is running and trying to access gpiodev concurrently, aborting...\n", __func__);
+			return -1;
+		}
+	}
 	// memory allocations
-	__gpiodev_props_dev.fd_val = (int *) malloc (NUM_GPIO_PINS * sizeof(int));
-	__gpiodev_props_dev.fd_mode = (int *) malloc (NUM_GPIO_PINS * sizeof(int));
-	__gpiodev_props_dev.val = (uint8_t *) malloc (NUM_GPIO_PINS * sizeof(uint8_t));
-	__gpiodev_props_dev.mode = (uint8_t *) malloc (NUM_GPIO_PINS * sizeof(uint8_t));
+	__gpiodev_props_dev.fd_val = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
+	__gpiodev_props_dev.fd_mode = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
+	__gpiodev_props_dev.val = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
+	__gpiodev_props_dev.mode = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
 
 	__gpiodev_pins_dev.fd = __gpiodev_props_dev.fd_val; // copy the value file descriptor array for access by gpioRead/gpioWrite
 	__gpiodev_pins_dev.mode = (__gpiodev_props_dev.mode);
@@ -44,7 +57,7 @@ int gpioInitialize(void)
 		return -1;
 	}
 	__gpiodev_props_dev.fd_unexport = fd;
-    __gpiodev_gpio_initd = 1;
+	__gpiodev_gpio_initd = 1;
 	return 1;
 }
 
@@ -138,7 +151,7 @@ int gpioSetMode(int pin, int mode)
 int gpioRead(int pin)
 {
 	char value_str[3];
-    lseek(__gpiodev_pins_dev.fd[pin], 0, SEEK_SET);
+	lseek(__gpiodev_pins_dev.fd[pin], 0, SEEK_SET);
 	if (read(__gpiodev_pins_dev.fd[pin], value_str, 3) == -1)
 	{
 		fprintf(stderr, "%s: Failed to read value from pin %d!\n", __func__, pin);

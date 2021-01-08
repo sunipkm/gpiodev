@@ -37,16 +37,17 @@ int __gpiodev_gpio_lut_pins[] = {
     978, // RX_LD
     979, // PWR_TGL
     980, // 5V_CTRL
-    981, // PLL_LOCK
-    982, // TS_CS_1
-    983, // TS_CS_2
-    984, // TS_CS_3
-    985, // TS_CS_4
-    986, // TS_CS_5
-    987, // TS_CS_6
-    988, // TS_CS_7
-    989, // UDC_CS
-    990  // CAM_RST
+    981, // TR_UDC
+    982, // PLL_LOCK
+    983, // TS_CS_1
+    984, // TS_CS_2
+    985, // TS_CS_3
+    986, // TS_CS_4
+    987, // TS_CS_5
+    988, // TS_CS_6
+    989, // TS_CS_7
+    990, // UDC_CS
+    991  // CAM_RST
 };
 
 /**

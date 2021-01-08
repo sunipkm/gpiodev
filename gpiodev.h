@@ -27,50 +27,26 @@
 
 #ifdef GPIODEV_INTERNAL
 /**
- * @brief GPIO look up table for easy access. Currently mapped to Raspberry Pi
- * system. The indices map the BCM pins to physical pins
+ * @brief GPIO look up table for easy access. Currently mapped to AD9361 CRR
+ * system. The indices map the ps7 GPIO pins to physical pins
  */
-int __gpiodev_gpio_lut_pins[] = {-1,
-    -1, // Pin 1, 3V3
-    -1, // Pin 2, 5V
-    -1, // Pin 3, I2C1 SDA
-    -1, // Pin 4, GND
-    -1, // Pin 5, I2C1 SCL
-    -1, // Pin 6, GND
-    4,  // Pin 7, GPCLK0
-    -1, // Pin 8, UART TX
-    -1, // Pin 9, GND
-    -1, // Pin 10, UART RX
-    17, // Pin 11
-    18, // Pin 12, PCM CLK
-    27, // Pin 13
-    -1, // Pin 14, GND
-    22, // Pin 15
-    23, // Pin 16
-    -1, // Pin 17, 3V3 Power
-    24, // Pin 18
-    -1, // Pin 19, SPI0 MOSI
-    -1, // Pin 20, GND
-    -1, // Pin 21, SPI0 MISO
-    25, // Pin 22
-    -1, // Pin 23, SPI0 SCLK
-    -1, // Pin 24, SPI0 CE0
-    -1, // Pin 25, GND
-    -1, // Pin 26, SPI0 CE1
-    0,  // Pin 27, EEPROM SDA
-    1,  // Pin 28, EEPROM SCL
-    5,  // Pin 29
-    -1, // Pin 30, GND
-    6,  // Pin 31
-    12, // Pin 32, PWM0
-    13, // Pin 33, PWM1
-    -1, // Pin 34, GND
-    19, // Pin 35, PCM FS
-    16, // Pin 36
-    26, // Pin 37
-    20, // Pin 38, PCM DIN
-    -1, // Pin 39, GND
-    21, // Pin 40, PCM DOUT
+int __gpiodev_gpio_lut_pins[] = {
+    -1,
+    976, // TR_BF
+    977, // TX_LD
+    978, // RX_LD
+    979, // PWR_TGL
+    980, // 5V_CTRL
+    981, // PLL_LOCK
+    982, // TS_CS_1
+    983, // TS_CS_2
+    984, // TS_CS_3
+    985, // TS_CS_4
+    986, // TS_CS_5
+    987, // TS_CS_6
+    988, // TS_CS_7
+    989, // UDC_CS
+    990  // CAM_RST
 };
 
 /**
@@ -85,12 +61,12 @@ const int NUM_GPIO_PINS = sizeof(__gpiodev_gpio_lut_pins) / sizeof(int);
  */
 typedef struct
 {
-    int *fd_val;   /// File descriptors containing the GPIO inout values
-    uint8_t *mode; /// I/O modes of the GPIO pin, can assume values GPIO_IN, GPIO_OUT and GPIO_INOUT
-    uint8_t *val;  /// Last read/set value of the GPIO pin
-    int *fd_mode;  /// File descriptors to IO modes of the GPIO pins
-    int fd_export;               /// File descriptor for GPIO export
-    int fd_unexport;             /// File descriptor for GPIO unexport
+    int *fd_val;     /// File descriptors containing the GPIO inout values
+    uint8_t *mode;   /// I/O modes of the GPIO pin, can assume values GPIO_IN, GPIO_OUT and GPIO_INOUT
+    uint8_t *val;    /// Last read/set value of the GPIO pin
+    int *fd_mode;    /// File descriptors to IO modes of the GPIO pins
+    int fd_export;   /// File descriptor for GPIO export
+    int fd_unexport; /// File descriptor for GPIO unexport
 } gpioprops;
 
 /** @brief Structure containing information for GPIO pin access.

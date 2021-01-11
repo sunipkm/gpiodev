@@ -207,7 +207,7 @@ int main()
     gpioInitialize();
     signal(SIGINT, &sig_handler); // set up signal handler
     char c = '\0';
-    int _idx = 0, idx = 960;
+    int _idx = 1, idx = 976;
     gpioSetMode(_idx, GPIO_OUT);
     while(!done)
     {
@@ -217,7 +217,7 @@ int main()
             case 'S':
                 printf("Enter GPIO pin number: ");
                 scanf(" %d", &idx);
-                _idx = idx - 960;
+                _idx = idx - 975;
                 gpioSetMode(_idx, GPIO_OUT);
                 c = '\0';
                 break;

@@ -63,7 +63,7 @@ int gpioInitialize(void)
 
 static int GPIOExport(int pin)
 {
-#define BUFFER_MAX 3
+#define BUFFER_MAX 10
     char buffer[BUFFER_MAX];
     ssize_t bytes_written;
 
@@ -178,6 +178,7 @@ void gpioDestroy(void)
     {
         if (__gpiodev_props_dev.fd_mode[i] >= 0) // if opened
         {
+            gpioWrite(i, GPIO_LOW);
             close(__gpiodev_props_dev.fd_val[i]);
             close(__gpiodev_props_dev.fd_mode[i]);
             GPIOUnexport(__gpiodev_gpio_lut_pins[i]);

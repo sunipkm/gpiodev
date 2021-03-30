@@ -47,7 +47,8 @@ int __gpiodev_gpio_lut_pins[] = {
     988, // TS_CS_6
     989, // TS_CS_7
     990, // UDC_CS
-    991  // CAM_RST
+    991, // CAM_RST
+    960  // FIFO_RST
 };
 
 /**

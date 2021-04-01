@@ -15,6 +15,10 @@
 #ifndef SH_GPIODEV_H
 #define SH_GPIODEV_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <pthread.h>
 
@@ -122,5 +126,9 @@ int gpioWrite(int pin, int val);
  * @returns The state of the pin, or error if not GPIO_LOW or GPIO_HIGH
  */
 int gpioRead(int pin);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // SH_GPIODEV_H

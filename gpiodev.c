@@ -77,7 +77,7 @@ static int GPIOUnexport(int pin)
     char buffer[BUFFER_MAX];
     ssize_t bytes_written;
     bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
-    write(__gpiodev_props_dev.fd_unexport, buffer, bytes_written);
+    bytes_written = write(__gpiodev_props_dev.fd_unexport, buffer, bytes_written);
     return (0);
 }
 

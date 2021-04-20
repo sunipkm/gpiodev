@@ -42,7 +42,7 @@ int __gpiodev_gpio_lut_pins[] = {
     979, // PWR_TGL
     980, // 5V_CTRL
     981, // TR_UDC
-    982, // PLL_LOCK
+    982, // CS_UDC
     983, // TS_CS_1
     984, // TS_CS_2
     985, // TS_CS_3
@@ -50,8 +50,8 @@ int __gpiodev_gpio_lut_pins[] = {
     987, // TS_CS_5
     988, // TS_CS_6
     989, // TS_CS_7
-    990, // UDC_CS
-    991, // CAM_RST
+    990, // CAM_RST
+    991, // PLL_LOCK
     960  // FIFO_RST
 };
 

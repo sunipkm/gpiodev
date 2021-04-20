@@ -122,7 +122,7 @@ int gpioSetMode(int pin, int mode)
             fprintf(stderr, "%s: Failed to set direction for pin %d!\n", __func__, bcmpin);
             return (-1);
         }
-
+        __gpiodev_pins_dev.mode[pin] = mode; // save the mode in which the pin has been opened
         // open file for value access
         if (__gpiodev_props_dev.fd_val[pin] < 0)
         {
@@ -176,7 +176,7 @@ void gpioDestroy(void)
 {
     for (int i = 0; i < NUM_GPIO_PINS; i++)
     {
-        if (__gpiodev_props_dev.fd_mode[i] >= 0) // if opened
+        if ((__gpiodev_props_dev.fd_mode[i] >= 0) && (__gpiodev_props_dev.mode[i] == GPIO_OUT)) // if opened, and pin is output
         {
             gpioWrite(i, GPIO_LOW);
             close(__gpiodev_props_dev.fd_val[i]);

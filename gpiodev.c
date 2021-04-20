@@ -176,9 +176,10 @@ void gpioDestroy(void)
 {
     for (int i = 0; i < NUM_GPIO_PINS; i++)
     {
-        if ((__gpiodev_props_dev.fd_mode[i] >= 0) && (__gpiodev_props_dev.mode[i] == GPIO_OUT)) // if opened, and pin is output
+        if (__gpiodev_props_dev.fd_mode[i] >= 0) // if opened, and pin is output
         {
-            gpioWrite(i, GPIO_LOW);
+            if ((__gpiodev_props_dev.mode[i] == GPIO_OUT))
+                gpioWrite(i, GPIO_LOW);
             close(__gpiodev_props_dev.fd_val[i]);
             close(__gpiodev_props_dev.fd_mode[i]);
             GPIOUnexport(__gpiodev_gpio_lut_pins[i]);

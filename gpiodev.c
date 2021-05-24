@@ -107,7 +107,7 @@ int gpioSetMode(int pin, enum GPIO_MODE mode)
         fprintf(stderr, "GPIODEV: Error, pin %d is not available for GPIO operation.\n", pin);
         return -1;
     }
-    if (mode < GPIO_IN || mode >= GPIO_MODES)
+    if (mode >= GPIO_MODES)
     {
         fprintf(stderr, "GPIODEV: Error, mode is not valid for pin %d.\n", pin);
     }
@@ -232,7 +232,7 @@ static void *gpio_irq_thread(void *params)
 int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void *userdata, int tout_ms)
 {
     int retval = -1;
-    if (__gpiodev_pins_dev.mode[pin] < 0)
+    if (__gpiodev_pins_dev.mode[pin] > GPIO_MODES)
     {
         gpioSetMode(pin, mode);
     }

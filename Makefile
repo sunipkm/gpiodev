@@ -22,13 +22,16 @@ ifeq ($(HOSTNAME), adrv9364)
 	EDCFLAGS += -DGPIODEV_PINOUT=PINOUT_AD9364
 endif
 
-all: gpiotest irqtest
-	echo "Targets gpiotest.out and irqtest.out finished building for device $(HOSTNAME)"
+all: gpiotest irqtest waittest
+	echo "Targets gpiotest.out, irqtest.out and waittest.out finished building for device $(HOSTNAME)"
 
 gpiotest: gpiotest.o $(COBJ)
 	$(CC) $(EDCFLAGS) -o $@.out $< $(COBJ) $(EDLDFLAGS)
 
 irqtest: irqtest.o $(COBJ)
+	$(CC) $(EDCFLAGS) -o $@.out $< $(COBJ) $(EDLDFLAGS)
+
+waittest: waittest.o $(COBJ)
 	$(CC) $(EDCFLAGS) -o $@.out $< $(COBJ) $(EDLDFLAGS)
 
 %.o: %.c

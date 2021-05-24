@@ -161,6 +161,19 @@ set_mode:
     else if (mode == GPIO_IN)
     {
         gpio_props_dev.val[pin] = gpioRead(pin);
+        // set up IRQ to none
+        snprintf(path, 256, "/sys/class/gpio/gpio%d/edge", bcmpin);
+        fd = open(path, O_WRONLY); // open as write
+        if (fd < 0)
+        {
+            eprintf("Error opening %s for write", path);
+        }
+        static char MODE_NONE[] = "none";
+        if (write(fd, MODE_NONE, sizeof(MODE_NONE) - 1) < 0)
+        {
+            eprintf("Error disabling interrupt on pin %d", pin);
+        }
+        close(fd);
     }
     return 1;
 }
@@ -193,12 +206,12 @@ int gpioWrite(int pin, int value)
 static void *gpio_irq_thread(void *params)
 {
     gpio_irq_params *irqparams = (gpio_irq_params *)params;
-    gpioRead(irqparams->pin); // consume pending IRQs
+    gpioRead(irqparams->pin);                                                             // consume pending IRQs
     struct pollfd pfd = {.fd = gpio_props_dev.fd_val[irqparams->pin], .events = POLLPRI}; // set up poll
     while (1)
     {
-        int pollret = poll(&pfd, 1, irqparams->tout_ms);                                      // block until something happens
-        if (pollret > 0)                                                                      // something happened
+        int pollret = poll(&pfd, 1, irqparams->tout_ms); // block until something happens
+        if (pollret > 0)                                 // something happened
         {
             if (pfd.revents == POLLHUP)
             {
@@ -233,6 +246,112 @@ static void *gpio_irq_thread(void *params)
         }
     }
     return NULL;
+}
+
+int gpioWaitIRQ(int pin, enum GPIO_MODE mode, int tout_ms)
+{
+    static char MODE_FALLING[] = "falling";
+    static char MODE_RISING[] = "rising";
+    static char MODE_BOTH[] = "both";
+    static char MODE_NONE[] = "none";
+    int retval = -1;
+    if ((mode < GPIO_IRQ_FALL) || (mode > GPIO_IRQ_BOTH))
+    {
+        eprintf("Invalid pin mode");
+        return -1;
+    }
+    if ((gpio_initd == 0) || (gpio_pins_dev.mode[pin] > GPIO_IRQ_BOTH))
+    {
+        if (gpioSetMode(pin, mode) < 0)
+        {
+            eprintf("Error setting pin mode");
+            return -1;
+        }
+    }
+    char *irq_mode;
+    int irq_mode_bytes = 0;
+    if (gpio_props_dev.mode[pin] == GPIO_IRQ_FALL)
+    {
+        irq_mode = MODE_FALLING;
+        irq_mode_bytes = sizeof(MODE_FALLING) - 1;
+    }
+    else if (gpio_props_dev.mode[pin] == GPIO_IRQ_RISE)
+    {
+        irq_mode = MODE_RISING;
+        irq_mode_bytes = sizeof(MODE_RISING) - 1;
+    }
+    else if (gpio_props_dev.mode[pin] == GPIO_IRQ_BOTH)
+    {
+        irq_mode = MODE_BOTH;
+        irq_mode_bytes = sizeof(MODE_BOTH) - 1;
+    }
+    else
+    {
+        eprintf("IRQ mode value %d on pin %d, not supported", gpio_props_dev.mode[pin], pin);
+        goto exit;
+    }
+    // set up interrupt
+    char fname[256];
+    snprintf(fname, sizeof(fname), "/sys/class/gpio/gpio%d/edge", gpio_lut_pins[pin]); // create edge select
+    int fd = open(fname, O_RDWR);
+    if (fd < 0)
+    {
+        eprintf("Pin %d does not support interrupt generation", pin);
+        goto exit;
+    }
+    if (write(fd, irq_mode, irq_mode_bytes) != irq_mode_bytes) // write edge select
+    {
+        eprintf("Could not set IRQ mode setting on pin %d", pin);
+        goto cleanup;
+    }
+    // set up poll
+    struct pollfd pfd = {.fd = gpio_pins_dev.fd[pin], .events = POLLPRI};
+    // clear IRQ
+    gpioRead(pin);
+    retval = poll(&pfd, 1, tout_ms);
+    if (retval > 0) // something happened
+    {
+        if (pfd.revents == POLLHUP)
+        {
+            eprintf("pollhup on pin %d", pin);
+            retval = -1;
+        }
+        else if (pfd.revents == POLLNVAL)
+        {
+            eprintf("pollnval on pin %d", pin);
+            retval = -1;
+        }
+        else if (pfd.revents == POLLERR)
+        {
+            eprintf("pollerr on pin %d", pin);
+            retval = -1;
+        }
+        else
+        {
+            retval = 1; // indicate interrupt received
+        }
+        gpioRead(pin); // clear IRQ
+    }
+    else if (retval == 0) // timeout
+    {
+        retval = 0;
+    }
+    else
+    {
+        retval = -1;
+        eprintf("Error on poll pin %d", pin);
+        perror("gpiodev poll");
+    }
+    irq_mode = MODE_NONE;
+    irq_mode_bytes = sizeof(MODE_NONE) - 1;
+    if (write(fd, irq_mode, irq_mode_bytes) != irq_mode_bytes) // disable edge select
+    {
+        eprintf("Could not set IRQ mode setting on pin %d", pin);
+    }
+cleanup:
+    close(fd);
+exit:
+    return retval;
 }
 
 int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void *userdata, int tout_ms)
@@ -341,7 +460,7 @@ void gpioDestroy(void)
         {
             if (gpio_props_dev.fd_mode[i] >= 0) // if opened, close pins
             {
-                if ((gpio_props_dev.mode[i] == GPIO_OUT)) // set pin to low if pin is output
+                if (gpio_props_dev.mode[i] == GPIO_OUT) // set pin to low if pin is output
                     gpioWrite(i, GPIO_LOW);
                 close(gpio_props_dev.fd_val[i]);
                 close(gpio_props_dev.fd_mode[i]);

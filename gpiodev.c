@@ -229,6 +229,7 @@ static void *gpio_irq_thread(void *params)
         {
             eprintf("Error on poll pin %d", irqparams->pin);
             perror("gpiodev poll");
+            break;
         }
     }
     return NULL;
@@ -237,15 +238,7 @@ static void *gpio_irq_thread(void *params)
 int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void *userdata, int tout_ms)
 {
     int retval = -1;
-    if (gpio_initd == 0)
-    {
-        if (gpioSetMode(pin, mode) < 0)
-        {
-            eprintf("Error setting pin mode");
-            return -1;
-        }
-    }
-    if (gpio_pins_dev.mode[pin] > GPIO_IRQ_BOTH)
+    if ((gpio_initd == 0) || (gpio_pins_dev.mode[pin] > GPIO_IRQ_BOTH))
     {
         if (gpioSetMode(pin, mode) < 0)
         {
@@ -255,12 +248,12 @@ int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void
     }
     char irq_mode[20];
     int irq_mode_bytes = 0;
-    if (gpio_props_dev.mode[pin] == GPIO_OUT)
+    if (gpio_props_dev.mode[pin] == GPIO_OUT) // should never trigger
     {
         eprintf("Pin is output, IRQ not available");
         goto exit;
     }
-    else if (gpio_props_dev.mode[pin] == GPIO_IN)
+    else if (gpio_props_dev.mode[pin] == GPIO_IN) // should never trigger
     {
         eprintf("Pin is input, IRQ trigger not set");
         goto exit;

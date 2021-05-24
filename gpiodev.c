@@ -106,7 +106,7 @@ int gpioSetMode(int pin, enum GPIO_MODE mode)
             return -1;
         gpio_initd = 1; // Indicate that GPIO has been initialized
     }
-    int bcmpin = __gpiodev_gpio_lut_pins[pin];
+    int bcmpin = gpio_lut_pins[pin];
     if (bcmpin < 0)
     {
         fprintf(stderr, "GPIODEV: Error, pin %d is not available for GPIO operation.\n", pin);
@@ -283,7 +283,7 @@ int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void
         goto exit;
     }
     char fname[256];
-    snprintf(fname, sizeof(fname), "/sys/class/gpio/gpio%d/edge", __gpiodev_gpio_lut_pins[pin]); // create edge select
+    snprintf(fname, sizeof(fname), "/sys/class/gpio/gpio%d/edge", gpio_lut_pins[pin]); // create edge select
     int fd = open(fname, O_RDWR);
     if (fd < 0)
     {
@@ -350,7 +350,7 @@ void gpioDestroy(void)
                     gpioWrite(i, GPIO_LOW);
                 close(gpio_props_dev.fd_val[i]);
                 close(gpio_props_dev.fd_mode[i]);
-                GPIOUnexport(__gpiodev_gpio_lut_pins[i]);
+                GPIOUnexport(gpio_lut_pins[i]);
             }
         }
         close(gpio_props_dev.fd_export);

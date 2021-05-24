@@ -88,7 +88,7 @@ typedef void (*gpio_irq_callback_t)(void *);
  * @brief GPIO look up table for easy access. Currently mapped to AD9361 CRR
  * system. The indices map the ps7 GPIO pins to physical pins
  */
-int __gpiodev_gpio_lut_pins[] =
+static int gpio_lut_pins[] =
 #if (GPIODEV_PINOUT == PINOUT_AD9361)
     {
         -1,
@@ -145,7 +145,6 @@ int __gpiodev_gpio_lut_pins[] =
         989,
         990,
         991};
-static int gpiodev_active_pinout = PINOUT_AD9364;
 #elif (GPIODEV_PINOUT == PINOUT_RPI)
     {
         -1,
@@ -190,7 +189,6 @@ static int gpiodev_active_pinout = PINOUT_AD9364;
         -1, // Pin 39, GND
         21, // Pin 40, PCM DOUT
 };
-static int gpiodev_active_pinout = PINOUT_RPI;
 
 /**
  * @brief Initialize GPIO sysfs subsystem. Should be called before calling gpioSetMode(). Otherwise called by default on the first instance gpioSetMode() is run.
@@ -205,7 +203,7 @@ void gpioDestroy(void);
 /**
  * @brief Number of avaliable GPIO pins in the system.
  */
-const int NUM_GPIO_PINS = sizeof(__gpiodev_gpio_lut_pins) / sizeof(int);
+const int NUM_GPIO_PINS = sizeof(gpio_lut_pins) / sizeof(int);
 
 /**
  * @brief Structure containing complete definition of the GPIO pin system, used

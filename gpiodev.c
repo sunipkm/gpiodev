@@ -6,17 +6,21 @@
 #include <stdlib.h>
 #include <sys/file.h>
 #include <errno.h>
+#include <poll.h>
 #define GPIODEV_INTERNAL
 #include "gpiodev.h"
 #undef GPIODEV_INTERNAL
 
 gpioprops __gpiodev_props_dev; /// Memory allocation for the GPIO properties struct
 gpiopins __gpiodev_pins_dev;   /// Memory allocation for the GPIO pins struct
+pthread_t *__gpiodev_irq_threads; /// Memory allocation for IRQ threads
 
 int __gpiodev_gpio_initd = 0; /// Default: Uninitialized
+#define GPIODEV_SINGLE_INSTANCE
 
 int gpioInitialize(void)
 {
+#ifdef GPIODEV_SINGLE_INSTANCE
     // allow only one instance of gpioInitialize()
     int pid_file = open("/var/run/gpiodev.pid", O_CREAT | O_RDWR, 0666);
     int rc = flock(pid_file, LOCK_EX | LOCK_NB);
@@ -28,11 +32,13 @@ int gpioInitialize(void)
             return -1;
         }
     }
+#endif
     // memory allocations
     __gpiodev_props_dev.fd_val = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
     __gpiodev_props_dev.fd_mode = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
     __gpiodev_props_dev.val = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
     __gpiodev_props_dev.mode = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
+    __gpiodev_irq_threads = (pthread_t *)malloc(NUM_GPIO_PINS * sizeof(pthread_t));
 
     __gpiodev_pins_dev.fd = __gpiodev_props_dev.fd_val; // copy the value file descriptor array for access by gpioRead/gpioWrite
     __gpiodev_pins_dev.mode = (__gpiodev_props_dev.mode);
@@ -81,7 +87,7 @@ static int GPIOUnexport(int pin)
     return (0);
 }
 
-int gpioSetMode(int pin, int mode)
+int gpioSetMode(int pin, enum GPIO_MODE mode)
 {
     if (__gpiodev_gpio_initd == 0) // GPIO uninitialized
     {
@@ -96,9 +102,9 @@ int gpioSetMode(int pin, int mode)
         return -1;
     }
 
-    if (mode != GPIO_IN && mode != GPIO_OUT)
+    if (mode < GPIO_IN || mode >= GPIO_MODES)
     {
-        fprintf(stderr, "GPIODEV: Error, mode is not GPIO_IN or GPIO_OUT for pin %d.\n", pin);
+        fprintf(stderr, "GPIODEV: Error, mode is not valid for pin %d.\n", pin);
     }
     if (!GPIOExport(bcmpin)) // pin export successful
     {
@@ -117,7 +123,8 @@ int gpioSetMode(int pin, int mode)
             __gpiodev_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
         }
         char modestr[] = "in\0out";
-        if (write(fd, &modestr[mode == GPIO_IN ? 0 : 3], mode == GPIO_IN ? 2 : 3) == -1)
+        
+        if (write(fd, &modestr[mode == GPIO_OUT ? 3 : 0], mode == GPIO_OUT ? 3 : 2) == -1) // default: in
         {
             fprintf(stderr, "%s: Failed to set direction for pin %d!\n", __func__, bcmpin);
             return (-1);
@@ -172,6 +179,119 @@ int gpioWrite(int pin, int value)
     return (0);
 }
 
+// this function sets up the IRQ thread
+static void *gpio_irq_thread(void *params)
+{
+    gpio_irq_params *irqparams = (gpio_irq_params *) params;
+    gpioRead(irqparams->pin); // consume pending IRQs
+    while (1)
+    {
+        struct pollfd pfd = {.fd = __gpiodev_props_dev.fd_val[irqparams->pin], .events = POLLPRI}; // set up poll
+        int pollret = poll(&pfd, 1, irqparams->tout_ms); // block until something happens
+        if (pollret > 0) // something happened
+        {
+            if (pfd.revents == POLLHUP)
+            {
+                eprintf("pollhup on pin %d", irqparams->pin);
+            }
+            else if (pfd.revents == POLLNVAL)
+            {
+                eprintf("pollnval on pin %d", irqparams->pin);
+            }
+            else if (pfd.revents == POLLERR)
+            {
+                eprintf("pollerr on pin %d", irqparams->pin);
+            }
+            else
+            {
+                irqparams->callback(irqparams->userdata); // perform the callback
+            }
+            gpioRead(irqparams->pin); // clear IRQ
+
+        }
+        else if (pollret == 0) // timeout
+        {
+#ifdef GPIODEBUG
+            eprintf("IRQ timeout on pin %d", irqparams->pin);
+#endif
+            continue;
+        }
+        else if (pollret < 0) // error
+        {
+            eprintf("Error on poll pin %d", irqparams->pin);
+            perror("gpiodev poll");
+        }
+    }
+    return NULL;
+}
+
+int gpioRegisterIRQ(int pin, gpio_irq_callback_t *func, void *userdata, int tout_ms)
+{
+    int retval = -1;
+    if (__gpiodev_pins_dev.fd[pin] < 0)
+    {
+        eprintf("Pin not initialized");
+        goto exit;
+    }
+    char irq_mode[20];
+    int irq_mode_bytes = 0;
+    if (__gpiodev_props_dev.mode[pin] == GPIO_OUT)
+    {
+        eprintf("Pin is output, IRQ not available");
+        goto exit;
+    }
+    else if (__gpiodev_props_dev.mode[pin] == GPIO_IN)
+    {
+        eprintf("Pin is input, IRQ trigger not set");
+        goto exit;
+    }
+    else if (__gpiodev_props_dev.mode[pin] == GPIO_INOUT)
+    {
+        eprintf("GPIO InOut not supported");
+        goto exit;
+    }
+    else if (__gpiodev_props_dev.mode[pin] == GPIO_IRQ_FALL)
+    {
+        irq_mode_bytes = snprintf(irq_mode, sizeof(irq_mode), "falling");
+    }
+    else if (__gpiodev_props_dev.mode[pin] == GPIO_IRQ_RISE)
+    {   
+        irq_mode_bytes = snprintf(irq_mode, sizeof(irq_mode), "rising");
+    }
+    else if (__gpiodev_props_dev.mode[pin] == GPIO_IRQ_LEVEL)
+    {
+        irq_mode_bytes = snprintf(irq_mode, sizeof(irq_mode), "both");
+    }
+    else
+    {
+        eprintf("IRQ mode value %d on pin %d, not supported", __gpiodev_props_dev.mode[pin], pin);
+        goto exit;
+    }
+    char fname[256];
+    snprintf(fname, sizeof(fname), "/sys/class/gpio/gpio%d/edge", __gpiodev_gpio_lut_pins[pin]); // create edge select
+    int fd = open(fname, O_RDWR);
+    if (fd < 0)
+    {
+        eprintf("Pin %d does not support interrupt generation", pin);
+        goto exit;
+    }
+    if (write(fd, irq_mode, irq_mode_bytes) != irq_mode_bytes) // write edge select
+    {
+        eprintf("Could not set IRQ mode setting on pin %d", pin);
+        goto cleanup;
+    }
+    // allocate memory for param
+    gpio_irq_params param[1];
+    param->pin = pin;
+    param->tout_ms = tout_ms;
+    param->userdata = userdata;
+    param->callback = func;
+cleanup:
+    close(fd);
+exit:
+    return retval;
+}
+
 void gpioDestroy(void)
 {
     for (int i = 0; i < NUM_GPIO_PINS; i++)
@@ -191,6 +311,18 @@ void gpioDestroy(void)
     free(__gpiodev_props_dev.fd_mode);
     free(__gpiodev_props_dev.val);
     free(__gpiodev_props_dev.mode);
+    for (int i = 0; i < NUM_GPIO_PINS; i++)
+        pthread_cancel(__gpiodev_irq_threads[i]);
+    free(__gpiodev_irq_threads);
+#ifdef GPIODEV_SINGLE_INSTANCE
+    int pid_file = open("/var/run/gpiodev.pid", O_RDWR); // should be open
+    int rc = flock(pid_file, LOCK_UN);
+    if (rc)
+    {
+        eprintf("Error unlocking PID file");
+    }
+    unlink("/var/run/gpiodev.pid");
+#endif
     return;
 }
 

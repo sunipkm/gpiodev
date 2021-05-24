@@ -16,25 +16,50 @@
 #define SH_GPIODEV_H
 
 #ifdef __cplusplus
-extern "C" {
+// extern "C" {
 #endif
 
 #include <stdint.h>
 #include <pthread.h>
 
+#define PINOUT_AD9361 0x81
+#define PINOUT_AD9364 0x92
+#define PINOUT_RPI    0x48
+
 #define GPIO_LOW 0  /// Low voltage on GPIO
 #define GPIO_HIGH 1 /// High voltage on GPIO
-#define GPIO_IN 0
-#define GPIO_OUT 1
-#define GPIO_INOUT 2
 #define GPIO_FNAME_MAX_LEN 256
+
+enum GPIO_MODE
+{
+    GPIO_IN,
+    GPIO_OUT,
+    GPIO_INOUT,
+    GPIO_IRQ_FALL,
+    GPIO_IRQ_RISE,
+    GPIO_IRQ_LEVEL,
+    GPIO_MODES
+};
+
+#ifndef eprintf
+#define eprintf(str, ...)                                                        \
+    {                                                                            \
+        fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
+        fflush(stderr);                                                          \
+    }
+
+typedef void (*gpio_irq_callback_t)(unsigned long long);
 
 #ifdef GPIODEV_INTERNAL
 /**
  * @brief GPIO look up table for easy access. Currently mapped to AD9361 CRR
  * system. The indices map the ps7 GPIO pins to physical pins
  */
-int __gpiodev_gpio_lut_pins[] = {
+#ifndef GPIODEV_PINOUT
+#define GPIODEV_PINOUT PINOUT_RPI
+#endif
+int __gpiodev_gpio_lut_pins[] = 
+#if(GPIODEV_PINOUT==PINOUT_AD9361){
     -1,
     976, // TR_BF
     977, // TX_LD
@@ -54,6 +79,11 @@ int __gpiodev_gpio_lut_pins[] = {
     991, // PLL_LOCK
     960  // FIFO_RST
 };
+#elif(GPIODEV_PINOUT==PINOUT_AD9364)
+
+#elif (GPIODEV_PINOUT==PINOUT_RPI)
+
+#endif
 
 /**
  * @brief Number of avaliable GPIO pins in the system.
@@ -85,6 +115,15 @@ typedef struct
     uint8_t *val;  /// Value of last read/set values
     uint8_t *mode; /// Mode of the GPIO pin
 } gpiopins;
+
+typedef struct
+{
+    int pin;        // pin number
+    gpio_irq_callback_t callback; // callback function
+    void *userdata; // callback user data
+    int tout_ms;    // poll timeout
+} gpio_irq_params;
+
 #endif // GPIODEV_INTERNAL
 
 /**
@@ -104,7 +143,7 @@ void gpioDestroy(void);
  * 
  * @returns Positive on success, negative on failure
  */
-int gpioSetMode(int pin, int mode);
+int gpioSetMode(int pin, enum GPIO_MODE mode);
 
 /**
  * @brief Write values GPIO_HIGH or GPIO_LOW to the GPIO pin indicated.
@@ -128,7 +167,7 @@ int gpioWrite(int pin, int val);
 int gpioRead(int pin);
 
 #ifdef __cplusplus
-}
+// }
 #endif
 
 #endif // SH_GPIODEV_H

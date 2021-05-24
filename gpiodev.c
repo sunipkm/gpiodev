@@ -194,9 +194,9 @@ static void *gpio_irq_thread(void *params)
 {
     gpio_irq_params *irqparams = (gpio_irq_params *)params;
     gpioRead(irqparams->pin); // consume pending IRQs
+    struct pollfd pfd = {.fd = gpio_props_dev.fd_val[irqparams->pin], .events = POLLPRI}; // set up poll
     while (1)
     {
-        struct pollfd pfd = {.fd = gpio_props_dev.fd_val[irqparams->pin], .events = POLLPRI}; // set up poll
         int pollret = poll(&pfd, 1, irqparams->tout_ms);                                      // block until something happens
         if (pollret > 0)                                                                      // something happened
         {

@@ -20,8 +20,8 @@ int main()
     int _idx = 1, idx = 976;
     if (gpiodev_pinout == PINOUT_RPI)
     {
-        idx = 11;
-        _idx = 11;
+        idx = 13;
+        _idx = 13;
     }
     else if (gpiodev_pinout == PINOUT_AD9361)
     {

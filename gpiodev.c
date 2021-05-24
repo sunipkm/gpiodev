@@ -335,11 +335,13 @@ void gpioDestroy(void)
 {
     if (gpio_initd)
     {
+        for (int i = 0; i < NUM_GPIO_PINS; i++) // close all running IRQs
+            pthread_cancel(gpio_irq_threads[i]);
         for (int i = 0; i < NUM_GPIO_PINS; i++)
         {
-            if (gpio_props_dev.fd_mode[i] >= 0) // if opened, and pin is output
+            if (gpio_props_dev.fd_mode[i] >= 0) // if opened, close pins
             {
-                if ((gpio_props_dev.mode[i] == GPIO_OUT))
+                if ((gpio_props_dev.mode[i] == GPIO_OUT)) // set pin to low if pin is output
                     gpioWrite(i, GPIO_LOW);
                 close(gpio_props_dev.fd_val[i]);
                 close(gpio_props_dev.fd_mode[i]);
@@ -352,8 +354,6 @@ void gpioDestroy(void)
         free(gpio_props_dev.fd_mode);
         free(gpio_props_dev.val);
         free(gpio_props_dev.mode);
-        for (int i = 0; i < NUM_GPIO_PINS; i++)
-            pthread_cancel(gpio_irq_threads[i]);
         free(gpio_irq_threads);
         free(irq_params);
 #if GPIODEV_SINGLE_INSTANCE > 0

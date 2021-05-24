@@ -1,21 +1,29 @@
 CC=gcc
 EDCFLAGS:= -std=gnu11 -O2 $(CFLAGS)
 EDLDFLAGS:= -lpthread $(LDFLAGS)
-SHELL=/bin/bash
 
 COBJ=gpiodev.o
 
-BRANCH=$(shell git branch --show-current)
+HOSTNAME=$(shell hostname)
 
-ifeq ($(BRANCH), "master")
+ifeq ($(HOSTNAME), spacehauc)
 	EDCFLAGS += -DGPIODEV_PINOUT=PINOUT_AD9361
 endif
-ifeq ($(BRANCH), "ad9364")
+ifeq ($(HOSTNAME), ad9361)
+	EDCFLAGS += -DGPIODEV_PINOUT=PINOUT_AD9361
+endif
+ifeq ($(HOSTNAME), fl9361)
+	EDCFLAGS += -DGPIODEV_PINOUT=PINOUT_AD9361
+endif
+ifeq ($(HOSTNAME), ad9364)
+	EDCFLAGS += -DGPIODEV_PINOUT=PINOUT_AD9364
+endif
+ifeq ($(HOSTNAME), adrv9364)
 	EDCFLAGS += -DGPIODEV_PINOUT=PINOUT_AD9364
 endif
 
 all: gpiotest irqtest
-	echo "Targets gpiotest.out and irqtest.out finished building for branch $(BRANCH)"
+	echo "Targets gpiotest.out and irqtest.out finished building for device $(HOSTNAME)"
 
 gpiotest: gpiotest.o $(COBJ)
 	$(CC) $(EDCFLAGS) -o $@.out $< $(COBJ) $(EDLDFLAGS)

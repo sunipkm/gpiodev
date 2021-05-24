@@ -189,7 +189,7 @@ static int gpio_lut_pins[] =
         -1, // Pin 39, GND
         21, // Pin 40, PCM DOUT
 };
-
+#endif
 /**
  * @brief Initialize GPIO sysfs subsystem. Should be called before calling gpioSetMode(). Otherwise called by default on the first instance gpioSetMode() is run.
  */
@@ -198,7 +198,6 @@ int gpioInitialize(void);
  * @brief Free allocated memory for GPIO pins etc. Should be called before exiting the program, set to be called automatically.
  */
 void gpioDestroy(void);
-#endif
 
 /**
  * @brief Number of avaliable GPIO pins in the system.

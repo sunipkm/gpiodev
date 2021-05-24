@@ -16,7 +16,7 @@ static gpiopins gpio_pins_dev;      /// Memory allocation for the GPIO pins stru
 static pthread_t *gpio_irq_threads; /// Memory allocation for IRQ threads
 static gpio_irq_params *irq_params;      /// Memory allocation for IRQ params
 
-int __gpiodev_gpio_initd = 0; /// Default: Uninitialized
+static int gpio_initd = 0; /// Default: Uninitialized
 
 int gpioInitialize(void)
 {
@@ -65,7 +65,7 @@ int gpioInitialize(void)
         goto cleanup;
     }
     gpio_props_dev.fd_unexport = fd;
-    __gpiodev_gpio_initd = 1;
+    gpio_initd = 1;
     return 1;
 cleanup:
     gpioDestroy();
@@ -97,11 +97,11 @@ int gpioSetMode(int pin, enum GPIO_MODE mode)
     static char modestr[] = "in\0out";
     char path[256];
     int fd = -1;
-    if (__gpiodev_gpio_initd == 0) // GPIO uninitialized
+    if (gpio_initd == 0) // GPIO uninitialized
     {
         if (gpioInitialize() < 0)
             return -1;
-        __gpiodev_gpio_initd = 1; // Indicate that GPIO has been initialized
+        gpio_initd = 1; // Indicate that GPIO has been initialized
     }
     int bcmpin = __gpiodev_gpio_lut_pins[pin];
     if (bcmpin < 0)
@@ -250,11 +250,6 @@ int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void
         eprintf("Pin is input, IRQ trigger not set");
         goto exit;
     }
-    else if (gpio_props_dev.mode[pin] == GPIO_INOUT)
-    {
-        eprintf("GPIO InOut not supported");
-        goto exit;
-    }
     else if (gpio_props_dev.mode[pin] == GPIO_IRQ_FALL)
     {
         irq_mode_bytes = snprintf(irq_mode, sizeof(irq_mode), "falling");
@@ -301,6 +296,31 @@ cleanup:
     close(fd);
 exit:
     return retval;
+}
+
+int gpioUnregisterIRQ(int pin)
+{
+    if (gpio_pins_dev.mode[pin] == GPIO_IN)
+    {
+        eprintf("No IRQ registered on pin, exiting");
+        return 0;
+    }
+    else if (gpio_pins_dev.mode[pin] == GPIO_OUT)
+    {
+        eprintf("Can not unregister IRQ on output pin");
+        return 0;
+    }
+    if ((gpio_pins_dev.mode[pin] > GPIO_OUT) && (gpio_pins_dev.mode[pin] <= GPIO_IRQ_BOTH)) // valid pin
+    {
+        pthread_cancel(gpio_irq_threads[pin]); // cancel the IRQ thread for the pin
+        return gpioSetMode(pin, GPIO_IN); // set the pin to input
+    }
+    else
+    {
+        eprintf("Pin not initialized");
+        return -1;
+    }
+    return -1; // should never reach this point
 }
 
 void gpioDestroy(void)

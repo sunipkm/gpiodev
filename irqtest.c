@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
     {
         sleep(1);
     }
+    gpioUnregisterIRQ(pin);
     gpioDestroy();
     return 0;
 }

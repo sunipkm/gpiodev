@@ -257,6 +257,13 @@ int gpioSetMode(int pin, enum GPIO_MODE mode);
  */
 int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void *userdata, int tout_ms);
 /**
+ * @brief Unregister IRQ handler on pin and set mode to standard input
+ * 
+ * @param pin Pin number
+ * @return int Positive on success, negative on error, zero on no change
+ */
+int gpioUnregisterIRQ(int pin);
+/**
  * @brief Write values GPIO_HIGH or GPIO_LOW to the GPIO pin indicated.
  * gpioRead or gpioWrite WILL NOT WORK if this function is not called
  * prior to GPIO use.

@@ -94,7 +94,6 @@ int __gpiodev_gpio_lut_pins[] =
 
 #elif (GPIODEV_PINOUT == PINOUT_AD9364)
     {
-        -1,
         960,
         961,
         962,

@@ -268,6 +268,16 @@ int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void
  */
 int gpioUnregisterIRQ(int pin);
 /**
+ * @brief This function blocks until an interrupt is received on the GPIO pin,
+ * or if the interrupt times out
+ * 
+ * @param pin Pin index in LUT
+ * @param mode GPIO_IRQ_*
+ * @param tout_ms IRQ poll timeout
+ * @return int Positive on interrupt (number of interrupts received), 0 on timeout, negative on error
+ */
+int gpioWaitIRQ(int pin, enum GPIO_MODE mode, int tout_ms);
+/**
  * @brief Write values GPIO_HIGH or GPIO_LOW to the GPIO pin indicated.
  * gpioRead or gpioWrite WILL NOT WORK if this function is not called
  * prior to GPIO use.

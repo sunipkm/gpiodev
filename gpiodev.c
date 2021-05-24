@@ -306,6 +306,8 @@ int gpioWaitIRQ(int pin, enum GPIO_MODE mode, int tout_ms)
     }
     // set up poll
     struct pollfd pfd = {.fd = gpio_pins_dev.fd[pin], .events = POLLPRI};
+    // clear IRQ
+    gpioRead(pin);
     retval = poll(&pfd, 1, tout_ms);
     if (retval > 0) // something happened
     {

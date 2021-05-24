@@ -27,10 +27,5 @@ int main(int argc, char *argv[])
     fflush(stdout);
     gpioWaitIRQ(pin, GPIO_IRQ_RISE, -1);
     printf("Interrupt received\n");
-    while(!done)
-    {
-        sleep(1);
-    }
-    gpioUnregisterIRQ(pin);
     return 0;
 }

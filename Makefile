@@ -7,11 +7,11 @@ COBJ=gpiodev.o
 all: gpiotest irqtest
 	echo "Targets gpiotest.out and irqtest.out finished building"
 
-gpiotest: $(COBJ)
-	$(CC) $(EDCFLAGS) -o $@.out $@.c $(COBJ) $(EDLDFLAGS)
+gpiotest: gpiotest.o $(COBJ)
+	$(CC) $(EDCFLAGS) -o $@.out $< $(COBJ) $(EDLDFLAGS)
 
-irqtest: $(COBJ)
-	$(CC) $(EDCFLAGS) -o $@.out $@.c $(COBJ) $(EDLDFLAGS)
+irqtest: irqtest.o $(COBJ)
+	$(CC) $(EDCFLAGS) -o $@.out $< $(COBJ) $(EDLDFLAGS)
 
 %.o: %.c
 	$(CC) $(EDCFLAGS) -o $@ -c $<

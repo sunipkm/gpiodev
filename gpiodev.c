@@ -20,7 +20,7 @@ int __gpiodev_gpio_initd = 0; /// Default: Uninitialized
 
 int gpioInitialize(void)
 {
-#ifdef GPIODEV_SINGLE_INSTANCE
+#if GPIODEV_SINGLE_INSTANCE > 1
     // allow only one instance of gpioInitialize()
     int pid_file = open("/var/run/gpiodev.pid", O_CREAT | O_RDWR, 0666);
     int rc = flock(pid_file, LOCK_EX | LOCK_NB);
@@ -109,7 +109,7 @@ int gpioSetMode(int pin, enum GPIO_MODE mode)
         fprintf(stderr, "GPIODEV: Error, pin %d is not available for GPIO operation.\n", pin);
         return -1;
     }
-    if (mode >= GPIO_MODES)
+    if (mode > GPIO_IRQ_BOTH)
     {
         fprintf(stderr, "GPIODEV: Error, mode is not valid for pin %d.\n", pin);
     }
@@ -234,7 +234,7 @@ static void *gpio_irq_thread(void *params)
 int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void *userdata, int tout_ms)
 {
     int retval = -1;
-    if (gpio_pins_dev.mode[pin] > GPIO_MODES)
+    if (gpio_pins_dev.mode[pin] > GPIO_IRQ_BOTH)
     {
         gpioSetMode(pin, mode);
     }
@@ -263,7 +263,7 @@ int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void
     {
         irq_mode_bytes = snprintf(irq_mode, sizeof(irq_mode), "rising");
     }
-    else if (gpio_props_dev.mode[pin] == GPIO_IRQ_LEVEL)
+    else if (gpio_props_dev.mode[pin] == GPIO_IRQ_BOTH)
     {
         irq_mode_bytes = snprintf(irq_mode, sizeof(irq_mode), "both");
     }
@@ -326,7 +326,7 @@ void gpioDestroy(void)
         pthread_cancel(gpio_irq_threads[i]);
     free(gpio_irq_threads);
     free(irq_params);
-#ifdef GPIODEV_SINGLE_INSTANCE
+#if GPIODEV_SINGLE_INSTANCE > 1
     int pid_file = open("/var/run/gpiodev.pid", O_RDWR); // should be open
     int rc = flock(pid_file, LOCK_UN);
     if (rc)

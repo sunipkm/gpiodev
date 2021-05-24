@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
     gpioRegisterIRQ(pin, GPIO_IRQ_RISE, &gpio_callback, &counter, 1000); // register pin 11 as IRQ on rising edge, 1 second timeout
     while(!done)
     {
-        usleep(1);
+        sleep(1);
     }
     gpioDestroy();
     return 0;

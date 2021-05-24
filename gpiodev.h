@@ -34,6 +34,19 @@ extern "C" {
 #define GPIODEV_PINOUT PINOUT_RPI
 #endif
 
+#ifndef GPIODEV_SINGLE_INSTANCE
+/**
+ * @brief GPIODEV_SINGLE_INSTANCE = 0 allows any number of programs using gpiodev library to operate simultaneously.
+ * Set this value > 0 to allow PID locking the gpiodev interface.
+ * 
+ */
+#define GPIODEV_SINGLE_INSTANCE 0
+#else
+#undef GPIODEV_SINGLE_INSTANCE
+#define GPIODEV_SINGLE_INSTANCE 1
+#warning "gpiodev: GPIODEV_SINGLE_INSTANCE specified. Only one program will be allowed to call gpioInitialize()"
+#endif
+
 static int gpiodev_pinout = GPIODEV_PINOUT;
 
 #define GPIO_LOW 0  /// Low voltage on GPIO
@@ -42,13 +55,12 @@ static int gpiodev_pinout = GPIODEV_PINOUT;
 
 enum GPIO_MODE
 {
-    GPIO_IN,
-    GPIO_OUT,
-    GPIO_INOUT,
-    GPIO_IRQ_FALL,
-    GPIO_IRQ_RISE,
-    GPIO_IRQ_LEVEL,
-    GPIO_MODES
+    GPIO_IN, /// Mode GPIO input
+    GPIO_OUT, /// Mode GPIO output
+    GPIO_IRQ_FALL, /// GPIO IRQ on falling edge
+    GPIO_IRQ_RISE, /// GPIO IRQ on rising edge
+    GPIO_IRQ_BOTH, /// GPIO IRQ on both edge
+    GPIO_MODES /// Constant GPIO modes
 };
 
 #ifndef eprintf

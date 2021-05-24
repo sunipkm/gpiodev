@@ -1,14 +1,24 @@
 CC=gcc
-TARGET=gpio_tester.out
+EDCFLAGS:= -std=gnu11 -O2 $(CFLAGS)
+EDLDFLAGS:= -lpthread $(LDFLAGS)
 
-all: $(TARGET)
-	sudo ./$(TARGET)
+COBJ=gpiodev.o
 
-$(TARGET):
-	$(CC) -std=c11 -O2 -DUNIT_TEST gpiodev.c -o $(TARGET)
+all: gpiotest irqtest
+	echo "Targets gpiotest.out and irqtest.out finished building"
+
+gpiotest: $(COBJ)
+	$(CC) $(EDCFLAGS) -o $@.out $@.c $(COBJ) $(EDLDFLAGS)
+
+irqtest: $(COBJ)
+	$(CC) $(EDCFLAGS) -o $@.out $@.c $(COBJ) $(EDLDFLAGS)
+
+%.o: %.c
+	$(CC) $(EDCFLAGS) -o $@ -c $<
 
 
 .PHONY: clean
 
 clean:
-	rm -vrf $(TARGET)
+	rm -vf *.out
+	rm -vf *.o

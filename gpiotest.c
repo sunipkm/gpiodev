@@ -10,11 +10,6 @@ void sig_handler(int sig)
 
 int main()
 {
-    if (gpioInitialize() < 0)
-    {
-        eprintf("Could not initialize GPIO");
-        return 0;
-    }
     signal(SIGINT, &sig_handler); // set up signal handler
     char c = '\0';
     int _idx = 1, idx = 976;
@@ -85,5 +80,5 @@ int main()
         }
         c = getchar();
     }
-    gpioDestroy();
+    return 0;
 }

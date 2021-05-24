@@ -30,11 +30,6 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
-    if (gpioInitialize() < 0)
-    {
-        eprintf("Could not initialize GPIO");
-        return 0;
-    }
     signal(SIGINT, &sig_handler); // set up signal handler
     gpioRegisterIRQ(pin, GPIO_IRQ_RISE, &gpio_callback, &counter, 1000); // register pin 11 as IRQ on rising edge, 1 second timeout
     while(!done)
@@ -42,6 +37,5 @@ int main(int argc, char *argv[])
         sleep(1);
     }
     gpioUnregisterIRQ(pin);
-    gpioDestroy();
     return 0;
 }

@@ -14,14 +14,15 @@
 static gpioprops gpio_props_dev;    /// Memory allocation for the GPIO properties struct
 static gpiopins gpio_pins_dev;      /// Memory allocation for the GPIO pins struct
 static pthread_t *gpio_irq_threads; /// Memory allocation for IRQ threads
-static gpio_irq_params *irq_params;      /// Memory allocation for IRQ params
+static gpio_irq_params *irq_params; /// Memory allocation for IRQ params
 
 static int gpio_initd = 0; /// Default: Uninitialized
 
 int gpioInitialize(void)
 {
-#if GPIODEV_SINGLE_INSTANCE > 1
+#if GPIODEV_SINGLE_INSTANCE > 0
     // allow only one instance of gpioInitialize()
+    eprintf("Initialized in single instance mode");
     int pid_file = open("/var/run/gpiodev.pid", O_CREAT | O_RDWR, 0666);
     int rc = flock(pid_file, LOCK_EX | LOCK_NB);
     if (rc)
@@ -29,7 +30,7 @@ int gpioInitialize(void)
         if (EWOULDBLOCK == errno) // another instance is running
         {
             fprintf(stderr, "%s: Fatal error, another instance of software is running and trying to access gpiodev concurrently, aborting...\n", __func__);
-            return -1;
+            exit(0);
         }
     }
 #endif
@@ -66,8 +67,10 @@ int gpioInitialize(void)
     }
     gpio_props_dev.fd_unexport = fd;
     gpio_initd = 1;
+    atexit(gpioDestroy);
     return 1;
 cleanup:
+    gpio_initd = 1;
     gpioDestroy();
     return -1;
 }
@@ -194,8 +197,8 @@ static void *gpio_irq_thread(void *params)
     while (1)
     {
         struct pollfd pfd = {.fd = gpio_props_dev.fd_val[irqparams->pin], .events = POLLPRI}; // set up poll
-        int pollret = poll(&pfd, 1, irqparams->tout_ms);                                           // block until something happens
-        if (pollret > 0)                                                                           // something happened
+        int pollret = poll(&pfd, 1, irqparams->tout_ms);                                      // block until something happens
+        if (pollret > 0)                                                                      // something happened
         {
             if (pfd.revents == POLLHUP)
             {
@@ -234,9 +237,21 @@ static void *gpio_irq_thread(void *params)
 int gpioRegisterIRQ(int pin, enum GPIO_MODE mode, gpio_irq_callback_t func, void *userdata, int tout_ms)
 {
     int retval = -1;
+    if (gpio_initd == 0)
+    {
+        if (gpioSetMode(pin, mode) < 0)
+        {
+            eprintf("Error setting pin mode");
+            return -1;
+        }
+    }
     if (gpio_pins_dev.mode[pin] > GPIO_IRQ_BOTH)
     {
-        gpioSetMode(pin, mode);
+        if (gpioSetMode(pin, mode) < 0)
+        {
+            eprintf("Error setting pin mode");
+            return -1;
+        }
     }
     char irq_mode[20];
     int irq_mode_bytes = 0;
@@ -313,7 +328,7 @@ int gpioUnregisterIRQ(int pin)
     if ((gpio_pins_dev.mode[pin] > GPIO_OUT) && (gpio_pins_dev.mode[pin] <= GPIO_IRQ_BOTH)) // valid pin
     {
         pthread_cancel(gpio_irq_threads[pin]); // cancel the IRQ thread for the pin
-        return gpioSetMode(pin, GPIO_IN); // set the pin to input
+        return gpioSetMode(pin, GPIO_IN);      // set the pin to input
     }
     else
     {
@@ -325,35 +340,39 @@ int gpioUnregisterIRQ(int pin)
 
 void gpioDestroy(void)
 {
-    for (int i = 0; i < NUM_GPIO_PINS; i++)
+    if (gpio_initd)
     {
-        if (gpio_props_dev.fd_mode[i] >= 0) // if opened, and pin is output
+        for (int i = 0; i < NUM_GPIO_PINS; i++)
         {
-            if ((gpio_props_dev.mode[i] == GPIO_OUT))
-                gpioWrite(i, GPIO_LOW);
-            close(gpio_props_dev.fd_val[i]);
-            close(gpio_props_dev.fd_mode[i]);
-            GPIOUnexport(__gpiodev_gpio_lut_pins[i]);
+            if (gpio_props_dev.fd_mode[i] >= 0) // if opened, and pin is output
+            {
+                if ((gpio_props_dev.mode[i] == GPIO_OUT))
+                    gpioWrite(i, GPIO_LOW);
+                close(gpio_props_dev.fd_val[i]);
+                close(gpio_props_dev.fd_mode[i]);
+                GPIOUnexport(__gpiodev_gpio_lut_pins[i]);
+            }
         }
-    }
-    close(gpio_props_dev.fd_export);
-    close(gpio_props_dev.fd_unexport);
-    free(gpio_props_dev.fd_val);
-    free(gpio_props_dev.fd_mode);
-    free(gpio_props_dev.val);
-    free(gpio_props_dev.mode);
-    for (int i = 0; i < NUM_GPIO_PINS; i++)
-        pthread_cancel(gpio_irq_threads[i]);
-    free(gpio_irq_threads);
-    free(irq_params);
-#if GPIODEV_SINGLE_INSTANCE > 1
-    int pid_file = open("/var/run/gpiodev.pid", O_RDWR); // should be open
-    int rc = flock(pid_file, LOCK_UN);
-    if (rc)
-    {
-        eprintf("Error unlocking PID file");
-    }
-    unlink("/var/run/gpiodev.pid");
+        close(gpio_props_dev.fd_export);
+        close(gpio_props_dev.fd_unexport);
+        free(gpio_props_dev.fd_val);
+        free(gpio_props_dev.fd_mode);
+        free(gpio_props_dev.val);
+        free(gpio_props_dev.mode);
+        for (int i = 0; i < NUM_GPIO_PINS; i++)
+            pthread_cancel(gpio_irq_threads[i]);
+        free(gpio_irq_threads);
+        free(irq_params);
+#if GPIODEV_SINGLE_INSTANCE > 0
+        int pid_file = open("/var/run/gpiodev.pid", O_RDWR); // should be open
+        int rc = flock(pid_file, LOCK_UN);
+        if (rc)
+        {
+            eprintf("Error unlocking PID file");
+        }
+        unlink("/var/run/gpiodev.pid");
+        gpio_initd = 0;
 #endif
+    }
     return;
 }

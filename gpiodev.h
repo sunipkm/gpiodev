@@ -4,7 +4,7 @@
  * @author Sunip K. Mukherjee (sunipkmukherjee@gmail.com)
  * @brief Header file containing function prototypes and properties of
  * the GPIO sysfs access module.
- * @version 0.1
+ * @version 1.0
  * @date 2020-08-30
  * 
  * @copyright Copyright (c) 2020
@@ -12,8 +12,8 @@
  * @license GPL v3
  */
 
-#ifndef SH_GPIODEV_H
-#define SH_GPIODEV_H
+#ifndef _GPIODEV_H
+#define _GPIODEV_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,9 +22,9 @@ extern "C" {
 #include <stdint.h>
 #include <pthread.h>
 
-#define PINOUT_AD9361 0
-#define PINOUT_AD9364 1
-#define PINOUT_RPI 2
+#define PINOUT_AD9361 0 //!< Activate GPIO LUT for AD9361 (SPACE HAUC)
+#define PINOUT_AD9364 1 //!< Activate GPIO LUT for AD9364 (Test)
+#define PINOUT_RPI 2    //!< Activate GPIO LUT for Raspberry Pi (Default)
 
 #ifndef GPIODEV_PINOUT
 /**
@@ -47,23 +47,30 @@ extern "C" {
 #warning "gpiodev: GPIODEV_SINGLE_INSTANCE specified. Only one program will be allowed to call gpioInitialize()"
 #endif
 
-static int gpiodev_pinout = GPIODEV_PINOUT;
+static int gpiodev_pinout = GPIODEV_PINOUT; //!< Runtime variable to determine pin layout program is compiled with
 
-#define GPIO_LOW 0  /// Low voltage on GPIO
-#define GPIO_HIGH 1 /// High voltage on GPIO
-#define GPIO_FNAME_MAX_LEN 256
+#define GPIO_LOW 0  //!< Low voltage on GPIO
+#define GPIO_HIGH 1 //!< High voltage on GPIO
 
+/**
+ * @brief Enumerates the available GPIO Pin modes.
+ * 
+ */
 enum GPIO_MODE
 {
-    GPIO_IN, /// Mode GPIO input
-    GPIO_OUT, /// Mode GPIO output
-    GPIO_IRQ_FALL, /// GPIO IRQ on falling edge
-    GPIO_IRQ_RISE, /// GPIO IRQ on rising edge
-    GPIO_IRQ_BOTH, /// GPIO IRQ on both edge
-    GPIO_MODES /// Constant GPIO modes
+    GPIO_IN,       //!< Mode GPIO input
+    GPIO_OUT,      //!< Mode GPIO output
+    GPIO_IRQ_FALL, //!< Trigger IRQ on falling edge
+    GPIO_IRQ_RISE, //!< Trigger IRQ on rising edge
+    GPIO_IRQ_BOTH, //!< Trigger IRQ on both rising and falling edge
 };
 
 #ifndef eprintf
+/**
+ * @brief Wrapper to print a string to stderr with printf like arg support. Prepends provided string with the function from which it is called
+ * and line number by default, and appends a newline.
+ * 
+ */
 #define eprintf(str, ...)                                                        \
     {                                                                            \
         fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
@@ -184,6 +191,15 @@ static int gpiodev_active_pinout = PINOUT_AD9364;
         21, // Pin 40, PCM DOUT
 };
 static int gpiodev_active_pinout = PINOUT_RPI;
+
+/**
+ * @brief Initialize GPIO sysfs subsystem. Should be called before calling gpioSetMode(). Otherwise called by default on the first instance gpioSetMode() is run.
+ */
+int gpioInitialize(void);
+/**
+ * @brief Free allocated memory for GPIO pins etc. Should be called before exiting the program, set to be called automatically.
+ */
+void gpioDestroy(void);
 #endif
 
 /**
@@ -226,15 +242,6 @@ typedef struct
 } gpio_irq_params;
 
 #endif // GPIODEV_INTERNAL
-
-/**
- * @brief Initialize GPIO sysfs subsystem. Must be called before calling gpioSetMode().
- */
-int gpioInitialize(void);
-/**
- * @brief Free allocated memory for GPIO pins etc.
- */
-void gpioDestroy(void);
 
 /**
  * @brief Set mode of GPIO Pins.
@@ -288,4 +295,4 @@ int gpioRead(int pin);
 }
 #endif
 
-#endif // SH_GPIODEV_H
+#endif // _GPIODEV_H

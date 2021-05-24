@@ -17,8 +17,16 @@ irqtest: irqtest.o $(COBJ)
 	$(CC) $(EDCFLAGS) -o $@ -c $<
 
 
+.PHONY: doc
+
+doc:
+	doxygen .doxyconfig
+
 .PHONY: clean
 
 clean:
 	rm -vf *.out
 	rm -vf *.o
+
+spotless: clean
+	rm -vrf doc

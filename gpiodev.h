@@ -82,7 +82,48 @@ int __gpiodev_gpio_lut_pins[] =
 #elif(GPIODEV_PINOUT==PINOUT_AD9364)
 
 #elif (GPIODEV_PINOUT==PINOUT_RPI)
-
+    {-1,
+    -1, // Pin 1, 3V3
+    -1, // Pin 2, 5V
+    -1, // Pin 3, I2C1 SDA
+    -1, // Pin 4, GND
+    -1, // Pin 5, I2C1 SCL
+    -1, // Pin 6, GND
+    4,  // Pin 7, GPCLK0
+    -1, // Pin 8, UART TX
+    -1, // Pin 9, GND
+    -1, // Pin 10, UART RX
+    17, // Pin 11
+    18, // Pin 12, PCM CLK
+    27, // Pin 13
+    -1, // Pin 14, GND
+    22, // Pin 15
+    23, // Pin 16
+    -1, // Pin 17, 3V3 Power
+    24, // Pin 18
+    -1, // Pin 19, SPI0 MOSI
+    -1, // Pin 20, GND
+    -1, // Pin 21, SPI0 MISO
+    25, // Pin 22
+    -1, // Pin 23, SPI0 SCLK
+    -1, // Pin 24, SPI0 CE0
+    -1, // Pin 25, GND
+    -1, // Pin 26, SPI0 CE1
+    0,  // Pin 27, EEPROM SDA
+    1,  // Pin 28, EEPROM SCL
+    5,  // Pin 29
+    -1, // Pin 30, GND
+    6,  // Pin 31
+    12, // Pin 32, PWM0
+    13, // Pin 33, PWM1
+    -1, // Pin 34, GND
+    19, // Pin 35, PCM FS
+    16, // Pin 36
+    26, // Pin 37
+    20, // Pin 38, PCM DIN
+    -1, // Pin 39, GND
+    21, // Pin 40, PCM DOUT
+};
 #endif
 
 /**

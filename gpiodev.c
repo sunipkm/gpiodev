@@ -45,7 +45,7 @@ static uint32_t gpioHardwareRevision(void);
 
 static uint32_t *map_mem(int fd, uint32_t addr, uint32_t len)
 {
-    return (uint32_t *)mmap(0, GPIO_LEN, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fdmem, GPIO_BASE);
+    return (uint32_t *)mmap(0, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fdmem, addr);
 }
 
 int gpioInitialize(void)
@@ -69,6 +69,8 @@ int gpioInitialize(void)
     gpio_props_dev.fd_mode = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
     gpio_props_dev.val = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
     gpio_props_dev.mode = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
+    gpio_props_dev.pud = (uint8_t *)malloc(NUM_GPIO_PINS * sizeof(uint8_t));
+    memset(gpio_props_dev.pud, 0x0, sizeof(uint8_t)); // initiate as pull up turned off
     gpio_irq_threads = (pthread_t *)malloc(NUM_GPIO_PINS * sizeof(pthread_t));
     irq_params = (gpio_irq_params *)malloc(NUM_GPIO_PINS * sizeof(gpio_irq_params));
 
@@ -331,6 +333,7 @@ int gpioWaitIRQ(int pin, enum GPIO_MODE mode, int tout_ms)
     }
     char *irq_mode;
     int irq_mode_bytes = 0;
+reinit:
     if (gpio_props_dev.mode[pin] == GPIO_IRQ_FALL)
     {
         irq_mode = MODE_FALLING;
@@ -345,6 +348,11 @@ int gpioWaitIRQ(int pin, enum GPIO_MODE mode, int tout_ms)
     {
         irq_mode = MODE_BOTH;
         irq_mode_bytes = sizeof(MODE_BOTH) - 1;
+    }
+    else if (gpio_props_dev.mode[pin] == GPIO_IN)
+    {
+        gpio_props_dev.mode[pin] = mode;
+        goto reinit;
     }
     else
     {
@@ -517,15 +525,18 @@ void gpioDestroy(void)
     {
         if (pi_ispi) // take care of RPi config
         {
+            if (pi_pud_avail)
+            {
+                for (int i = 0; i < NUM_GPIO_PINS; i++)
+                    if (gpio_props_dev.pud[i]) // pull up/down set
+                        gpioSetPullUpDown(i, GPIO_PUD_OFF);
+                munmap((void *)gpio_reg, GPIO_LEN);
+                pi_pud_avail = false;
+            }
             if (pi_syst_avail)
             {
                 munmap((void *)syst_reg, SYST_LEN);
                 pi_syst_avail = false;
-            }
-            if (pi_pud_avail)
-            {
-                munmap((void *)gpio_reg, GPIO_LEN);
-                pi_pud_avail = false;
             }
             if (pi_mmap_rdy)
             {
@@ -739,6 +750,7 @@ int gpioSetPullUpDown(int pin, unsigned pud)
             goto ret;
         }
         unsigned gpio = gpio_lut_pins[pin];
+        gpio_props_dev.pud[pin] = pud; // store pull up enable mode
         int shift = (gpio & 0xf) << 1;
         uint32_t bits;
         uint32_t pull;

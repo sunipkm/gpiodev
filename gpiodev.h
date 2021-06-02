@@ -227,6 +227,7 @@ typedef struct
     int *fd_val;     /// File descriptors containing the GPIO inout values
     uint8_t *mode;   /// I/O modes of the GPIO pin, can assume values GPIO_IN, GPIO_OUT and GPIO_INOUT
     uint8_t *val;    /// Last read/set value of the GPIO pin
+    uint8_t *pud;    /// Status of pull up of the GPIO pin, by default no pull up
     int *fd_mode;    /// File descriptors to IO modes of the GPIO pins
     int fd_export;   /// File descriptor for GPIO export
     int fd_unexport; /// File descriptor for GPIO unexport

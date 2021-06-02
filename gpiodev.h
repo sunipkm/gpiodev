@@ -22,8 +22,10 @@ extern "C" {
 #include <stdint.h>
 #include <pthread.h>
 
+#ifndef DOXYGEN
 #define PINOUT_AD9361 0 //!< Activate GPIO LUT for AD9361 (SPACE HAUC)
 #define PINOUT_AD9364 1 //!< Activate GPIO LUT for AD9364 (Test)
+#endif
 #define PINOUT_RPI 2    //!< Activate GPIO LUT for Raspberry Pi (Default)
 
 #ifndef GPIODEV_PINOUT
@@ -37,7 +39,7 @@ extern "C" {
 #ifndef GPIODEV_SINGLE_INSTANCE
 /**
  * @brief GPIODEV_SINGLE_INSTANCE = 0 allows any number of programs using gpiodev library to operate simultaneously.
- * Set this value > 0 to allow PID locking the gpiodev interface.
+ * Set this value > 0 to allow PID locking of the gpiodev interface.
  * 
  */
 #define GPIODEV_SINGLE_INSTANCE 0
@@ -63,6 +65,17 @@ enum GPIO_MODE
     GPIO_IRQ_FALL, //!< Trigger IRQ on falling edge
     GPIO_IRQ_RISE, //!< Trigger IRQ on rising edge
     GPIO_IRQ_BOTH, //!< Trigger IRQ on both rising and falling edge
+};
+
+/**
+ * @brief Enumerates available GPIO pull up states, only available on Raspberry Pi
+ * 
+ */
+enum GPIO_PUD
+{
+    GPIO_PUD_OFF,  //!< Disable pull up/down
+    GPIO_PUD_DOWN, //!< Set pin as pull down
+    GPIO_PUD_UP,   //!< Set pin as pull up
 };
 
 #ifndef eprintf
@@ -297,6 +310,14 @@ int gpioWrite(int pin, int val);
  * @returns The state of the pin, or error if not GPIO_LOW or GPIO_HIGH
  */
 int gpioRead(int pin);
+/**
+ * @brief Set pull-up on a pin (available only in Raspberry Pi)
+ * 
+ * @param pin Physical pin number
+ * @param pud of type enum GPIO_PUD
+ * @return int returns positive on success, negative on error
+ */
+int gpioSetPullUpDown(int pin, enum GPIO_PUD pud);
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -7,16 +8,45 @@
 #include <sys/file.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdbool.h>
+#include <sys/mman.h>
+#include <time.h>
+#include <sys/time.h>
+#include <arpa/inet.h>
 #define GPIODEV_INTERNAL
 #include "gpiodev.h"
 #undef GPIODEV_INTERNAL
 
-static gpioprops gpio_props_dev;    /// Memory allocation for the GPIO properties struct
-static gpiopins gpio_pins_dev;      /// Memory allocation for the GPIO pins struct
-static pthread_t *gpio_irq_threads; /// Memory allocation for IRQ threads
-static gpio_irq_params *irq_params; /// Memory allocation for IRQ params
+static gpioprops gpio_props_dev;                    /// Memory allocation for the GPIO properties struct
+static gpiopins gpio_pins_dev;                      /// Memory allocation for the GPIO pins struct
+static pthread_t *gpio_irq_threads;                 /// Memory allocation for IRQ threads
+static gpio_irq_params *irq_params;                 /// Memory allocation for IRQ params
+static volatile int fdmem = -1;                     /// Memory allocation for /dev/mem
+static volatile uint32_t *gpio_reg = MAP_FAILED;    /// Memory allocation for GPIO register base pointer
+static volatile uint32_t *syst_reg = MAP_FAILED;    /// Memory allocation for system register (for gpio delay)
+static volatile uint32_t pi_peri_phys = 0x20000000; /// Base pointer for peripheral system
+static volatile bool pi_ispi = false;
+static volatile bool pi_is_2711 = false;
+static volatile bool pi_pud_avail = false;
+static volatile bool pi_syst_avail = false;
+static volatile bool pi_mmap_rdy = false;
+
+#define GPIO_BASE (pi_peri_phys + 0x00200000)
+#define GPIO_LEN 0xF4 /* 2711 has more registers */
+
+#define SYST_BASE (pi_peri_phys + 0x00003000)
+#define SYST_LEN 0x1C
+
+#define SYST_CLO 1
 
 static int gpio_initd = 0; /// Default: Uninitialized
+
+static uint32_t gpioHardwareRevision(void);
+
+static uint32_t *map_mem(int fd, uint32_t addr, uint32_t len)
+{
+    return (uint32_t *)mmap(0, GPIO_LEN, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fdmem, GPIO_BASE);
+}
 
 int gpioInitialize(void)
 {
@@ -66,6 +96,37 @@ int gpioInitialize(void)
         goto cleanup;
     }
     gpio_props_dev.fd_unexport = fd;
+    // obtain hardware revision, check if Pi
+    uint32_t rev = gpioHardwareRevision();
+    if (pi_ispi) // if it is a pi
+    {
+        if (fdmem = open("/dev/mem", O_RDWR | O_SYNC) < 0)
+        {
+            eprintf("Could not open /dev/mem");
+        }
+        else
+        {
+            pi_mmap_rdy = true;
+            gpio_reg = map_mem(fdmem, GPIO_BASE, GPIO_LEN);
+            if ((gpio_reg != NULL) && (gpio_reg != MAP_FAILED))
+            {
+                pi_pud_avail = true;
+            }
+            else
+            {
+                eprintf("Failed to map gpio registers");
+            }
+            syst_reg = map_mem(fdmem, SYST_BASE, SYST_LEN);
+            if ((syst_reg != NULL) && (syst_reg != MAP_FAILED)) // meaning the previous step was successful
+            {
+                pi_syst_avail = true;
+            }
+            else
+            {
+                eprintf("Failed to map system registers");
+            }
+        }
+    }
     gpio_initd = 1;
     atexit(gpioDestroy);
     return 1;
@@ -454,6 +515,25 @@ void gpioDestroy(void)
 {
     if (gpio_initd)
     {
+        if (pi_ispi) // take care of RPi config
+        {
+            if (pi_syst_avail)
+            {
+                munmap((void *)syst_reg, SYST_LEN);
+                pi_syst_avail = false;
+            }
+            if (pi_pud_avail)
+            {
+                munmap((void *)gpio_reg, GPIO_LEN);
+                pi_pud_avail = false;
+            }
+            if (pi_mmap_rdy)
+            {
+                close(fdmem);
+                pi_mmap_rdy = false;
+            }
+            pi_ispi = false;
+        }
         for (int i = 0; i < NUM_GPIO_PINS; i++) // close all running IRQs
             pthread_cancel(gpio_irq_threads[i]);
         for (int i = 0; i < NUM_GPIO_PINS; i++)
@@ -487,4 +567,219 @@ void gpioDestroy(void)
 #endif
     }
     return;
+}
+
+uint32_t gpioHardwareRevision(void)
+{
+    static uint32_t rev = 0;
+
+    FILE *fp;
+    char buf[512];
+    char term;
+
+    if (rev)
+        return rev;
+
+    fp = fopen("/proc/cpuinfo", "r");
+
+    if (fp != NULL)
+    {
+        while (fgets(buf, sizeof(buf), fp) != NULL)
+        {
+            if (!strncasecmp("revision\t:", buf, 10))
+            {
+                if (sscanf(buf + 10, "%x%c", &rev, &term) == 2)
+                {
+                    if (term != '\n')
+                        rev = 0;
+                }
+            }
+        }
+        fclose(fp);
+    }
+
+    /* (some) arm64 operating systems get revision number here  */
+
+    if (rev == 0)
+    {
+        fp = fopen("/proc/device-tree/system/linux,revision", "r");
+
+        if (fp != NULL)
+        {
+            uint32_t tmp;
+            if (fread(&tmp, 1, 4, fp) == 4)
+            {
+                /*
+               for some reason the value returned by reading
+               this /proc entry seems to be big endian,
+               convert it.
+            */
+                rev = ntohl(tmp);
+                rev &= 0xFFFFFF; /* mask out warranty bit */
+            }
+            fclose(fp);
+        }
+    }
+
+    pi_ispi = 0;
+    rev &= 0xFFFFFF; /* mask out warranty bit */
+
+    /* Decode revision code */
+
+    if ((rev & 0x800000) == 0) /* old rev code */
+    {
+        if ((rev > 0) && (rev < 0x0016)) /* all BCM2835 */
+        {
+            pi_ispi = 1;
+            pi_peri_phys = 0x20000000;
+        }
+        else
+        {
+            eprintf("unknown revision=%x", rev);
+            rev = 0;
+        }
+    }
+    else /* new rev code */
+    {
+        switch ((rev >> 12) & 0xF) /* just interested in BCM model */
+        {
+
+        case 0x0: /* BCM2835 */
+            pi_ispi = 1;
+            pi_peri_phys = 0x20000000;
+            break;
+
+        case 0x1: /* BCM2836 */
+        case 0x2: /* BCM2837 */
+            pi_ispi = 1;
+            pi_peri_phys = 0x3F000000;
+            break;
+
+        case 0x3: /* BCM2711 */
+            pi_ispi = 1;
+            pi_peri_phys = 0xFE000000;
+            pi_is_2711 = 1;
+            break;
+
+        default:
+            rev = 0;
+            pi_ispi = 0;
+            eprintf("unknown revision %x", rev);
+            break;
+        }
+    }
+
+    return rev;
+}
+
+#define GPPUD 37
+#define GPPUDCLK0 38
+
+/* BCM2711 has different pulls */
+
+#define GPPUPPDN0 57
+
+static void myGpioSleep(int seconds, int micros)
+{
+    struct timespec ts, rem;
+
+    ts.tv_sec = seconds;
+    ts.tv_nsec = micros * 1000;
+
+    while (clock_nanosleep(CLOCK_REALTIME, 0, &ts, &rem))
+    {
+        /* copy remaining time to ts */
+        ts = rem;
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+static uint32_t myGpioDelay(uint32_t micros)
+{
+    uint32_t start;
+
+    start = syst_reg[SYST_CLO];
+    /* Longest busy delay */
+
+#define PI_MAX_BUSY_DELAY 100
+#define MILLION 1000000
+    if (micros <= PI_MAX_BUSY_DELAY)
+    {
+        while ((syst_reg[SYST_CLO] - start) <= micros)
+            ;
+    }
+    else
+    {
+        myGpioSleep(micros / MILLION, micros % MILLION);
+    }
+
+    return (syst_reg[SYST_CLO] - start);
+}
+
+int gpioSetPullUpDown(int pin, unsigned pud)
+{
+#define BANK (gpio >> 5)
+#define BIT (1 << (gpio & 0x1F))
+    int retval = -1;
+    if (pi_ispi && pi_pud_avail)
+    {
+        if (gpio_props_dev.mode[pin] == GPIO_OUT) // can not be set on output pin
+        {
+            eprintf("Pin is output, can not set pull up/down mode");
+            goto ret;
+        }
+        unsigned gpio = gpio_lut_pins[pin];
+        int shift = (gpio & 0xf) << 1;
+        uint32_t bits;
+        uint32_t pull;
+
+        if (pi_is_2711)
+        {
+            switch (pud)
+            {
+            case GPIO_PUD_OFF:
+                pull = 0;
+                break;
+            case GPIO_PUD_UP:
+                pull = 1;
+                break;
+            case GPIO_PUD_DOWN:
+                pull = 2;
+                break;
+            default:
+                eprintf("%d not a valid pullup/down state", pud);
+                retval = -1;
+                goto ret;
+                break;
+            }
+
+            bits = *(gpio_reg + GPPUPPDN0 + (gpio >> 4));
+            bits &= ~(3 << shift);
+            bits |= (pull << shift);
+            *(gpio_reg + GPPUPPDN0 + (gpio >> 4)) = bits;
+        }
+        else
+        {
+            *(gpio_reg + GPPUD) = pud;
+
+            if (pi_syst_avail)
+                myGpioDelay(1);
+            else
+                usleep(10); // 10 microseconds
+
+            *(gpio_reg + GPPUDCLK0 + BANK) = BIT;
+            if (pi_syst_avail)
+                myGpioDelay(1);
+            else
+                usleep(10); // 10 microseconds
+
+            *(gpio_reg + GPPUD) = 0;
+
+            *(gpio_reg + GPPUDCLK0 + BANK) = 0;
+        }
+        retval = 1;
+    }
+ret:
+    return retval;
 }

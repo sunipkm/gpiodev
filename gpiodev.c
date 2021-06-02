@@ -722,6 +722,15 @@ int gpioSetPullUpDown(int pin, unsigned pud)
 #define BANK (gpio >> 5)
 #define BIT (1 << (gpio & 0x1F))
     int retval = -1;
+    if (!gpio_initd)
+    {
+        gpioInitialize();
+        if (gpioSetMode(pin, GPIO_IN) < 0)
+        {
+            eprintf("Error setting pin mode to input");
+            goto ret;
+        }
+    }
     if (pi_ispi && pi_pud_avail)
     {
         if (gpio_props_dev.mode[pin] == GPIO_OUT) // can not be set on output pin

@@ -100,7 +100,7 @@ int gpioInitialize(void)
     uint32_t rev = gpioHardwareRevision();
     if (pi_ispi) // if it is a pi
     {
-        if (fdmem = open("/dev/mem", O_RDWR | O_SYNC) < 0)
+        if ((fdmem = open("/dev/mem", O_RDWR | O_SYNC)) < 0)
         {
             eprintf("Could not open /dev/mem");
         }

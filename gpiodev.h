@@ -49,7 +49,7 @@ extern "C" {
 #warning "gpiodev: GPIODEV_SINGLE_INSTANCE specified. Only one program will be allowed to call gpioInitialize()"
 #endif
 
-static int gpiodev_pinout = GPIODEV_PINOUT; //!< Runtime variable to determine pin layout program is compiled with
+static int gpiodev_pinout __attribute__((used)) = GPIODEV_PINOUT; //!< Runtime variable to determine pin layout program is compiled with
 
 #define GPIO_LOW 0  //!< Low voltage on GPIO
 #define GPIO_HIGH 1 //!< High voltage on GPIO

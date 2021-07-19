@@ -100,6 +100,11 @@ int gpioInitialize(void)
     gpio_props_dev.fd_unexport = fd;
     // obtain hardware revision, check if Pi
     uint32_t rev = gpioHardwareRevision();
+#ifdef GPIODEBUG
+    eprintf("GPIO revision: 0x%x", rev);
+#else
+    ((void) rev);
+#endif
     if (pi_ispi) // if it is a pi
     {
         if ((fdmem = open("/dev/mem", O_RDWR | O_SYNC)) < 0)

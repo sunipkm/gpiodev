@@ -45,7 +45,7 @@ static uint32_t gpioHardwareRevision(void);
 
 static uint32_t *map_mem(int fd, uint32_t addr, uint32_t len)
 {
-    return (uint32_t *)mmap(0, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fdmem, addr);
+    return (uint32_t *)mmap(0, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, addr);
 }
 
 int gpioInitialize(void)

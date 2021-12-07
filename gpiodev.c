@@ -31,6 +31,240 @@ static volatile bool pi_pud_avail = false;
 static volatile bool pi_syst_avail = false;
 static volatile bool pi_mmap_rdy = false;
 
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+
+#define PI_MIN_GPIO 0
+#define PI_MAX_GPIO 53
+
+/* user_gpio: 0-31 */
+
+#define PI_MAX_USER_GPIO 31
+
+#define PI_CLEAR 0
+#define PI_SET 1
+
+#define PI_OFF 0
+#define PI_ON 1
+
+#define PI_INPUT 0
+#define PI_OUTPUT 1
+#define PI_ALT0 4
+#define PI_ALT1 5
+#define PI_ALT2 6
+#define PI_ALT3 7
+#define PI_ALT4 3
+#define PI_ALT5 2
+
+#define PI_CLOCK_PWM 0
+#define PI_CLOCK_PCM 1
+
+/* dutycycle: 0-range */
+
+#define PI_DEFAULT_DUTYCYCLE_RANGE 255
+
+/* range: 25-40000 */
+
+#define PI_MIN_DUTYCYCLE_RANGE 25
+#define PI_MAX_DUTYCYCLE_RANGE 40000
+
+/* pulsewidth: 0, 500-2500 */
+
+#define PI_SERVO_OFF 0
+#define PI_MIN_SERVO_PULSEWIDTH 500
+#define PI_MAX_SERVO_PULSEWIDTH 2500
+
+/* hardware PWM */
+
+#define PI_HW_PWM_MIN_FREQ 1
+#define PI_HW_PWM_MAX_FREQ 125000000
+#define PI_HW_PWM_MAX_FREQ_2711 187500000
+#define PI_HW_PWM_RANGE 1000000
+
+#define PWM_FREQS 18
+
+#define PI_WAVE_BLOCKS 4
+
+#define CYCLES_PER_BLOCK 80
+#define PULSE_PER_CYCLE 25
+
+static int pwmFreq[PWM_FREQS];
+
+#define SUPERCYCLE 800
+#define SUPERLEVEL 20000
+
+#define PAGES_PER_BLOCK 53
+
+#define CBS_PER_IPAGE 117
+#define LVS_PER_IPAGE 38
+#define OFF_PER_IPAGE 38
+#define TCK_PER_IPAGE 2
+#define ON_PER_IPAGE 2
+#define PAD_PER_IPAGE 7
+
+typedef struct
+{
+    uint8_t is;
+    uint8_t pad;
+    uint16_t width;
+    uint16_t range; /* dutycycles specified by 0 .. range */
+    uint16_t freqIdx;
+    uint16_t deferOff;
+    uint16_t deferRng;
+} gpioInfo_t;
+
+static gpioInfo_t gpioInfo[PI_MAX_GPIO + 1];
+
+typedef struct
+{ /* linux/arch/arm/mach-bcm2708/include/mach/dma.h */
+    uint32_t info;
+    uint32_t src;
+    uint32_t dst;
+    uint32_t length;
+    uint32_t stride;
+    uint32_t next;
+    uint32_t pad[2];
+} rawCbs_t;
+
+typedef struct
+{
+    rawCbs_t cb[128];
+} dmaPage_t;
+
+static dmaPage_t **dmaVirt = MAP_FAILED;
+
+typedef struct
+{
+    rawCbs_t cb[CBS_PER_IPAGE];
+    uint32_t level[LVS_PER_IPAGE];
+    uint32_t gpioOff[OFF_PER_IPAGE];
+    uint32_t tick[TCK_PER_IPAGE];
+    uint32_t gpioOn[ON_PER_IPAGE];
+    uint32_t periphData;
+    uint32_t pad[PAD_PER_IPAGE];
+} dmaIPage_t;
+static dmaIPage_t **dmaIVirt = MAP_FAILED;
+static volatile uint32_t *pwmReg = MAP_FAILED;
+static bool pi_pwmreg_avail = false;
+#define PWM_BASE (pi_peri_phys + 0x0020C000)
+#define PWM_LEN 0x28
+
+static bool pwm_reg_avail = false;
+
+#define GPIO_UNDEFINED 0
+#define GPIO_WRITE 1
+#define GPIO_PWM 2
+#define GPIO_SERVO 3
+#define GPIO_HW_CLK 4
+#define GPIO_HW_PWM 5
+#define GPIO_SPI 6
+#define GPIO_I2C 7
+
+#define GPSET0 7
+#define GPSET1 8
+
+#define GPCLR0 10
+#define GPCLR1 11
+
+typedef struct
+{
+    unsigned bufferMilliseconds;
+    unsigned clockMicros;
+    unsigned clockPeriph;
+    unsigned DMAprimaryChannel;
+    unsigned DMAsecondaryChannel;
+    unsigned socketPort;
+    unsigned ifFlags;
+    unsigned memAllocMode;
+    unsigned dbgLevel;
+    unsigned alertFreq;
+    uint32_t internals;
+    /*
+      0-3: dbgLevel
+      4-7: alertFreq
+      */
+} gpioCfg_t;
+
+#define PI_DEFAULT_BUFFER_MILLIS 120
+#define PI_DEFAULT_CLK_MICROS 5
+#define PI_DEFAULT_CLK_PERIPHERAL PI_CLOCK_PCM
+#define PI_DEFAULT_IF_FLAGS 0
+#define PI_DEFAULT_FOREGROUND 0
+#define PI_DEFAULT_DMA_CHANNEL 14
+#define PI_DEFAULT_DMA_PRIMARY_CHANNEL 14
+#define PI_DEFAULT_DMA_SECONDARY_CHANNEL 6
+#define PI_DEFAULT_DMA_PRIMARY_CH_2711 7
+#define PI_DEFAULT_DMA_SECONDARY_CH_2711 6
+#define PI_DEFAULT_DMA_NOT_SET 15
+#define PI_DEFAULT_SOCKET_PORT 8888
+#define PI_DEFAULT_SOCKET_PORT_STR "8888"
+#define PI_DEFAULT_SOCKET_ADDR_STR "localhost"
+#define PI_DEFAULT_UPDATE_MASK_UNKNOWN 0x0000000FFFFFFCLL
+#define PI_DEFAULT_UPDATE_MASK_B1 0x03E7CF93
+#define PI_DEFAULT_UPDATE_MASK_A_B2 0xFBC7CF9C
+#define PI_DEFAULT_UPDATE_MASK_APLUS_BPLUS 0x0080480FFFFFFCLL
+#define PI_DEFAULT_UPDATE_MASK_ZERO 0x0080000FFFFFFCLL
+#define PI_DEFAULT_UPDATE_MASK_PI2B 0x0080480FFFFFFCLL
+#define PI_DEFAULT_UPDATE_MASK_PI3B 0x0000000FFFFFFCLL
+#define PI_DEFAULT_UPDATE_MASK_PI4B 0x0000000FFFFFFCLL
+#define PI_DEFAULT_UPDATE_MASK_COMPUTE 0x00FFFFFFFFFFFFLL
+
+static volatile gpioCfg_t gpioCfg =
+    {
+        PI_DEFAULT_BUFFER_MILLIS,
+        PI_DEFAULT_CLK_MICROS,
+        PI_DEFAULT_CLK_PERIPHERAL,
+        PI_DEFAULT_DMA_NOT_SET, /* primary DMA */
+        PI_DEFAULT_DMA_NOT_SET, /* secondary DMA */
+        PI_DEFAULT_SOCKET_PORT,
+        PI_DEFAULT_IF_FLAGS,
+        0, /* PI_MEM_ALLOC_AUTO */
+        0, /* dbgLevel */
+        0, /* alertFreq */
+        0, /* internals */
+};
+
+static unsigned bufferBlocks; /* number of blocks in buffer */
+static unsigned bufferCycles; /* number of cycles */
+
+static bool pi_dmavirt_avail = false;
+
+static bool pi_pwm_avail = false;
+
+#define PWM_FREQS 18
+
+typedef struct
+{
+    uint16_t valid;
+    uint16_t servoIdx;
+} clkCfg_t;
+static const clkCfg_t clkCfg[] =
+    {
+        /* valid servo */
+        {0, 0},  /*  0 */
+        {1, 17}, /*  1 */
+        {1, 16}, /*  2 */
+        {0, 0},  /*  3 */
+        {1, 15}, /*  4 */
+        {1, 14}, /*  5 */
+        {0, 0},  /*  6 */
+        {0, 0},  /*  7 */
+        {1, 13}, /*  8 */
+        {0, 0},  /*  9 */
+        {1, 12}, /* 10 */
+};
+
+static const uint16_t pwmRealRange[PWM_FREQS] =
+    {25, 50, 100, 125, 200, 250, 400, 500, 625,
+     800, 1000, 1250, 2000, 2500, 4000, 5000, 10000, 20000};
+
+static const uint16_t pwmCycles[PWM_FREQS] =
+    {1, 2, 4, 5, 8, 10, 16, 20, 25,
+     32, 40, 50, 80, 100, 160, 200, 400, 800};
+
+static void initPWM(unsigned bits);
+
+#endif
+
 #define GPIO_BASE (pi_peri_phys + 0x00200000)
 #define GPIO_LEN 0xF4 /* 2711 has more registers */
 
@@ -45,7 +279,7 @@ static uint32_t gpioHardwareRevision(void);
 
 static uint32_t *map_mem(int fd, uint32_t addr, uint32_t len)
 {
-    return (uint32_t *)mmap(0, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fdmem, addr);
+    return (uint32_t *)mmap(0, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_LOCKED, fd, addr);
 }
 
 int gpioInitialize(void)
@@ -103,10 +337,28 @@ int gpioInitialize(void)
 #ifdef GPIODEBUG
     eprintf("GPIO revision: 0x%x", rev);
 #else
-    ((void) rev);
+    ((void)rev);
 #endif
     if (pi_ispi) // if it is a pi
     {
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+        int servoCycles, superCycles;
+
+        servoCycles = gpioCfg.bufferMilliseconds / 20;
+        if (gpioCfg.bufferMilliseconds % 20)
+            servoCycles++;
+
+        bufferCycles = (SUPERCYCLE * servoCycles) / gpioCfg.clockMicros;
+
+        superCycles = bufferCycles / SUPERCYCLE;
+        if (bufferCycles % SUPERCYCLE)
+            superCycles++;
+
+        bufferCycles = SUPERCYCLE * superCycles;
+
+        bufferBlocks = bufferCycles / CYCLES_PER_BLOCK;
+#endif
+
         if ((fdmem = open("/dev/mem", O_RDWR | O_SYNC)) < 0)
         {
             eprintf("Could not open /dev/mem");
@@ -132,7 +384,50 @@ int gpioInitialize(void)
             {
                 eprintf("Failed to map system registers");
             }
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+            dmaVirt = mmap(
+                0, PAGES_PER_BLOCK * (bufferBlocks + PI_WAVE_BLOCKS) * sizeof(dmaPage_t *),
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_LOCKED,
+                -1, 0);
+
+            if (dmaVirt == MAP_FAILED)
+            {
+                eprintf("Failed to map DMA registers");
+            }
+            else
+            {
+                pi_dmavirt_avail = true;
+            }
+            pwmReg = map_mem(fdmem, PWM_BASE, PWM_LEN);
+
+            if (pwmReg == MAP_FAILED)
+            {
+                eprintf("Failed to map PWM registers");
+            }
+            else
+            {
+                pi_pwmreg_avail = true;
+            }
+#endif
         }
+
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+        dmaIVirt = (dmaIPage_t **)dmaVirt;
+        for (int i = 0; i < PWM_FREQS; i++)
+        {
+            pwmFreq[i] =
+                (1000000.0 /
+                 ((float)PULSE_PER_CYCLE * gpioCfg.clockMicros * pwmCycles[i])) +
+                0.5;
+        }
+
+        if (pi_pwmreg_avail && pi_dmavirt_avail)
+        {
+            pi_pwm_avail = true;
+            initPWM(10);
+        }
+#endif
     }
     gpio_initd = 1;
     atexit(gpioDestroy);
@@ -530,6 +825,16 @@ void gpioDestroy(void)
     {
         if (pi_ispi) // take care of RPi config
         {
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+            if (pi_dmavirt_avail)
+            {
+                munmap(dmaVirt, PAGES_PER_BLOCK * (bufferBlocks + PI_WAVE_BLOCKS) * sizeof(dmaPage_t *));
+            }
+            if (pi_pwmreg_avail)
+            {
+                munmap((void *)pwmReg, PWM_LEN);
+            }
+#endif
             if (pi_pud_avail)
             {
                 for (int i = 0; i < NUM_GPIO_PINS; i++)
@@ -809,3 +1114,643 @@ int gpioSetPullUpDown(int pin, unsigned pud)
 ret:
     return retval;
 }
+
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+/* ----------------------------------------------------------------------- */
+
+static void myOffPageSlot(int pos, int *page, int *slot)
+{
+    *page = pos / OFF_PER_IPAGE;
+    *slot = pos % OFF_PER_IPAGE;
+}
+
+static int myGpioRead(unsigned gpio)
+{
+#define GPLEV0 13
+    if ((*(gpio_reg + GPLEV0 + BANK) & BIT) != 0)
+        return PI_ON;
+    else
+        return PI_OFF;
+}
+
+static void myGpioWrite(unsigned gpio, unsigned level)
+{
+    if (level == PI_OFF)
+        *(gpio_reg + GPCLR0 + BANK) = BIT;
+    else
+        *(gpio_reg + GPSET0 + BANK) = BIT;
+}
+
+static void myGpioSetMode(unsigned gpio, unsigned mode)
+{
+    int reg, shift;
+
+    reg = gpio / 10;
+    shift = (gpio % 10) * 3;
+
+    gpio_reg[reg] = (gpio_reg[reg] & ~(7 << shift)) | (mode << shift);
+}
+
+static void mySetGpioOff(unsigned gpio, int pos)
+{
+    int page, slot;
+
+    myOffPageSlot(pos, &page, &slot);
+
+    dmaIVirt[page]->gpioOff[slot] |= (1 << gpio);
+}
+
+/* ----------------------------------------------------------------------- */
+
+static void myClearGpioOff(unsigned gpio, int pos)
+{
+    int page, slot;
+
+    myOffPageSlot(pos, &page, &slot);
+
+    dmaIVirt[page]->gpioOff[slot] &= ~(1 << gpio);
+}
+
+/* ----------------------------------------------------------------------- */
+
+static void mySetGpioOn(unsigned gpio, int pos)
+{
+    int page, slot;
+
+    page = pos / ON_PER_IPAGE;
+    slot = pos % ON_PER_IPAGE;
+
+    dmaIVirt[page]->gpioOn[slot] |= (1 << gpio);
+}
+
+/* ----------------------------------------------------------------------- */
+
+static void myClearGpioOn(unsigned gpio, int pos)
+{
+    int page, slot;
+
+    page = pos / ON_PER_IPAGE;
+    slot = pos % ON_PER_IPAGE;
+
+    dmaIVirt[page]->gpioOn[slot] &= ~(1 << gpio);
+}
+
+static void myGpioSetPwm(unsigned gpio, int oldVal, int newVal)
+{
+    int switchGpioOff;
+    int newOff, oldOff, realRange, cycles, i;
+    int deferOff, deferRng;
+
+    switchGpioOff = 0;
+
+    realRange = pwmRealRange[gpioInfo[gpio].freqIdx];
+
+    cycles = pwmCycles[gpioInfo[gpio].freqIdx];
+
+    newOff = (newVal * realRange) / gpioInfo[gpio].range;
+    oldOff = (oldVal * realRange) / gpioInfo[gpio].range;
+
+    deferOff = gpioInfo[gpio].deferOff;
+    deferRng = gpioInfo[gpio].deferRng;
+
+    if (gpioInfo[gpio].deferOff)
+    {
+        for (i = 0; i < SUPERLEVEL; i += deferRng)
+        {
+            myClearGpioOff(gpio, i + deferOff);
+        }
+        gpioInfo[gpio].deferOff = 0;
+    }
+
+    if (newOff != oldOff)
+    {
+        if (newOff && oldOff) /* PWM CHANGE */
+        {
+            if (newOff != realRange)
+            {
+                for (i = 0; i < SUPERLEVEL; i += realRange)
+                    mySetGpioOff(gpio, i + newOff);
+            }
+
+            if (newOff > oldOff)
+            {
+                for (i = 0; i < SUPERLEVEL; i += realRange)
+                    myClearGpioOff(gpio, i + oldOff);
+            }
+            else
+            {
+                gpioInfo[gpio].deferOff = oldOff;
+                gpioInfo[gpio].deferRng = realRange;
+            }
+        }
+        else if (newOff) /* PWM START */
+        {
+            if (newOff != realRange)
+            {
+                for (i = 0; i < SUPERLEVEL; i += realRange)
+                    mySetGpioOff(gpio, i + newOff);
+            }
+
+            /* schedule new gpio on */
+
+            for (i = 0; i < SUPERCYCLE; i += cycles)
+                mySetGpioOn(gpio, i);
+        }
+        else /* PWM STOP */
+        {
+            /* deschedule gpio on */
+
+            for (i = 0; i < SUPERCYCLE; i += cycles)
+                myClearGpioOn(gpio, i);
+
+            for (i = 0; i < SUPERLEVEL; i += realRange)
+                myClearGpioOff(gpio, i + oldOff);
+
+            switchGpioOff = 1;
+        }
+
+        if (switchGpioOff)
+        {
+            *(gpio_reg + GPCLR0) = (1 << gpio);
+            *(gpio_reg + GPCLR0) = (1 << gpio);
+        }
+    }
+}
+
+#define PWM_CTL 0
+#define PWM_STA 1
+#define PWM_DMAC 2
+#define PWM_RNG1 4
+#define PWM_DAT1 5
+#define PWM_FIFO 6
+#define PWM_RNG2 8
+#define PWM_DAT2 9
+
+#define PWM_CTL_MSEN2 (1 << 15)
+#define PWM_CTL_PWEN2 (1 << 8)
+#define PWM_CTL_MSEN1 (1 << 7)
+#define PWM_CTL_CLRF1 (1 << 6)
+#define PWM_CTL_USEF1 (1 << 5)
+#define PWM_CTL_MODE1 (1 << 1)
+#define PWM_CTL_PWEN1 (1 << 0)
+
+#define PWM_DMAC_ENAB (1 << 31)
+#define PWM_DMAC_PANIC(x) ((x) << 8)
+#define PWM_DMAC_DREQ(x) (x)
+
+static void initPWM(unsigned bits)
+{
+    /* reset PWM */
+
+    pwmReg[PWM_CTL] = 0;
+
+    myGpioDelay(10);
+
+    pwmReg[PWM_STA] = -1;
+
+    myGpioDelay(10);
+
+    /* set number of bits to transmit */
+
+    pwmReg[PWM_RNG1] = bits;
+
+    myGpioDelay(10);
+
+    dmaIVirt[0]->periphData = 1;
+
+    /* enable PWM DMA, raise panic and dreq thresholds to 15 */
+
+    pwmReg[PWM_DMAC] = PWM_DMAC_ENAB |
+                       PWM_DMAC_PANIC(15) |
+                       PWM_DMAC_DREQ(15);
+
+    myGpioDelay(10);
+
+    /* clear PWM fifo */
+
+    pwmReg[PWM_CTL] = PWM_CTL_CLRF1;
+
+    myGpioDelay(10);
+
+    /* enable PWM channel 1 and use fifo */
+
+    pwmReg[PWM_CTL] = PWM_CTL_USEF1 | PWM_CTL_MODE1 | PWM_CTL_PWEN1;
+}
+
+static void myGpioSetServo(unsigned gpio, int oldVal, int newVal)
+{
+    int newOff, oldOff, realRange, cycles, i;
+    int deferOff, deferRng;
+
+    realRange = pwmRealRange[clkCfg[gpioCfg.clockMicros].servoIdx];
+    cycles = pwmCycles[clkCfg[gpioCfg.clockMicros].servoIdx];
+
+    newOff = (newVal * realRange) / 20000;
+    oldOff = (oldVal * realRange) / 20000;
+
+    deferOff = gpioInfo[gpio].deferOff;
+    deferRng = gpioInfo[gpio].deferRng;
+
+    if (gpioInfo[gpio].deferOff)
+    {
+        for (i = 0; i < SUPERLEVEL; i += deferRng)
+        {
+            myClearGpioOff(gpio, i + deferOff);
+        }
+        gpioInfo[gpio].deferOff = 0;
+    }
+
+    if (newOff != oldOff)
+    {
+        if (newOff && oldOff) /* SERVO CHANGE */
+        {
+            for (i = 0; i < SUPERLEVEL; i += realRange)
+                mySetGpioOff(gpio, i + newOff);
+
+            if (newOff > oldOff)
+            {
+                for (i = 0; i < SUPERLEVEL; i += realRange)
+                    myClearGpioOff(gpio, i + oldOff);
+            }
+            else
+            {
+                gpioInfo[gpio].deferOff = oldOff;
+                gpioInfo[gpio].deferRng = realRange;
+            }
+        }
+        else if (newOff) /* SERVO START */
+        {
+            for (i = 0; i < SUPERLEVEL; i += realRange)
+                mySetGpioOff(gpio, i + newOff);
+
+            /* schedule new gpio on */
+
+            for (i = 0; i < SUPERCYCLE; i += cycles)
+                mySetGpioOn(gpio, i);
+        }
+        else /* SERVO STOP */
+        {
+            /* deschedule gpio on */
+
+            for (i = 0; i < SUPERCYCLE; i += cycles)
+                myClearGpioOn(gpio, i);
+
+            /* if in pulse then delay for the last cycle to complete */
+
+            if (myGpioRead(gpio))
+                myGpioDelay(PI_MAX_SERVO_PULSEWIDTH);
+
+            /* deschedule gpio off */
+
+            for (i = 0; i < SUPERLEVEL; i += realRange)
+                myClearGpioOff(gpio, i + oldOff);
+        }
+    }
+}
+
+static void switchFunctionOff(unsigned gpio)
+{
+    switch (gpioInfo[gpio].is)
+    {
+    case GPIO_SERVO:
+        /* switch servo off */
+        myGpioSetServo(gpio, gpioInfo[gpio].width, 0);
+        gpioInfo[gpio].width = 0;
+        break;
+
+    case GPIO_PWM:
+        /* switch pwm off */
+        myGpioSetPwm(gpio, gpioInfo[gpio].width, 0);
+        gpioInfo[gpio].width = 0;
+        break;
+
+    case GPIO_HW_CLK:
+        /* No longer disable clock hardware, doing that was a bug. */
+        gpioInfo[gpio].width = 0;
+        break;
+
+    case GPIO_HW_PWM:
+        /* No longer disable PWM hardware, doing that was a bug. */
+        gpioInfo[gpio].width = 0;
+        break;
+    }
+}
+
+int gpioPWM(unsigned pin, unsigned val)
+{
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    if (val > gpioInfo[gpio].range)
+    {
+        eprintf("gpio %d, bad dutycycle (%d)", gpio, val);
+        return -2;
+    }
+
+    if (gpioInfo[gpio].is != GPIO_PWM)
+    {
+        switchFunctionOff(gpio);
+
+        gpioInfo[gpio].is = GPIO_PWM;
+
+        if (!val)
+            myGpioWrite(gpio, 0);
+    }
+
+    myGpioSetMode(gpio, GPIO_OUT);
+
+    myGpioSetPwm(gpio, gpioInfo[gpio].width, val);
+
+    gpioInfo[gpio].width = val;
+
+    return 0;
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioGetPWMdutycycle(unsigned pin)
+{
+    unsigned pwm;
+
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    switch (gpioInfo[gpio].is)
+    {
+    case GPIO_PWM:
+        return gpioInfo[gpio].width;
+
+    case GPIO_HW_PWM:
+        return PI_HW_PWM_RANGE / 2;
+
+    case GPIO_HW_CLK:
+        return PI_HW_PWM_RANGE / 2;
+
+    default:
+        eprintf("not a PWM gpio (%d)", pin);
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioSetPWMrange(unsigned pin, unsigned range)
+{
+    int oldWidth, newWidth;
+
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    oldWidth = gpioInfo[gpio].width;
+
+    if (oldWidth)
+    {
+        if (gpioInfo[gpio].is == GPIO_PWM)
+        {
+            newWidth = (range * oldWidth) / gpioInfo[gpio].range;
+
+            myGpioSetPwm(gpio, oldWidth, 0);
+            gpioInfo[gpio].range = range;
+            gpioInfo[gpio].width = newWidth;
+            myGpioSetPwm(gpio, 0, newWidth);
+        }
+    }
+
+    gpioInfo[gpio].range = range;
+
+    /* return the actual range for the current gpio frequency */
+
+    return pwmRealRange[gpioInfo[gpio].freqIdx];
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioGetPWMrange(unsigned pin)
+{
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    switch (gpioInfo[gpio].is)
+    {
+    case GPIO_HW_PWM:
+    case GPIO_HW_CLK:
+        return PI_HW_PWM_RANGE;
+
+    default:
+        return gpioInfo[gpio].range;
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioGetPWMrealRange(unsigned pin)
+{
+    unsigned pwm;
+
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    switch (gpioInfo[gpio].is)
+    {
+    case GPIO_HW_PWM:
+    case GPIO_HW_CLK:
+        return PI_HW_PWM_RANGE;
+
+    default:
+        return pwmRealRange[gpioInfo[gpio].freqIdx];
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioSetPWMfrequency(unsigned pin, unsigned frequency)
+{
+    int i, width;
+    unsigned diff, best, idx;
+
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    if (frequency > pwmFreq[0])
+        idx = 0;
+    else if (frequency < pwmFreq[PWM_FREQS - 1])
+        idx = PWM_FREQS - 1;
+    else
+    {
+        best = 100000; /* impossibly high frequency difference */
+        idx = 0;
+
+        for (i = 0; i < PWM_FREQS; i++)
+        {
+            if (frequency > pwmFreq[i])
+                diff = frequency - pwmFreq[i];
+            else
+                diff = pwmFreq[i] - frequency;
+
+            if (diff < best)
+            {
+                best = diff;
+                idx = i;
+            }
+        }
+    }
+
+    width = gpioInfo[gpio].width;
+
+    if (width)
+    {
+        if (gpioInfo[gpio].is == GPIO_PWM)
+        {
+            myGpioSetPwm(gpio, width, 0);
+            gpioInfo[gpio].freqIdx = idx;
+            myGpioSetPwm(gpio, 0, width);
+        }
+    }
+
+    gpioInfo[gpio].freqIdx = idx;
+
+    return pwmFreq[idx];
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioGetPWMfrequency(unsigned pin)
+{
+    unsigned pwm, clock;
+
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    switch (gpioInfo[gpio].is)
+    {
+    default:
+        return pwmFreq[gpioInfo[gpio].freqIdx];
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioServo(unsigned pin, unsigned val)
+{
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    if ((val != PI_SERVO_OFF) && (val < PI_MIN_SERVO_PULSEWIDTH))
+        eprintf("gpio %d, bad pulsewidth (%d)", gpio, val);
+
+    if (val > PI_MAX_SERVO_PULSEWIDTH)
+        eprintf("gpio %d, bad pulsewidth (%d)", gpio, val);
+
+    if (gpioInfo[gpio].is != GPIO_SERVO)
+    {
+        switchFunctionOff(gpio);
+
+        gpioInfo[gpio].is = GPIO_SERVO;
+
+        if (!val)
+            myGpioWrite(gpio, 0);
+    }
+
+    myGpioSetMode(gpio, PI_OUTPUT);
+
+    myGpioSetServo(gpio, gpioInfo[gpio].width, val);
+
+    gpioInfo[gpio].width = val;
+
+    return 0;
+}
+
+/* ----------------------------------------------------------------------- */
+
+int gpioGetServoPulsewidth(unsigned pin)
+{
+    if (!pi_ispi)
+    {
+        eprintf("Function not available on non-Raspberry Pi devices");
+        return -1;
+    }
+    if (!pi_pwm_avail)
+    {
+        return -1;
+    }
+
+    int gpio = gpio_lut_pins[pin];
+
+    if (gpioInfo[gpio].is != GPIO_SERVO)
+        eprintf("not a servo gpio (%d)", gpio);
+
+    return gpioInfo[gpio].width;
+}
+
+#endif // if (GPIODEV_PINOUT == PINOUT_RPI)

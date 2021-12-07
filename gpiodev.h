@@ -320,6 +320,18 @@ int gpioRead(int pin);
  */
 int gpioSetPullUpDown(int pin, enum GPIO_PUD pud);
 
+#if (GPIODEV_PINOUT == PINOUT_RPI)
+int gpioPWM(unsigned pin, unsigned val);
+int gpioGetPWMdutycycle(unsigned pin);
+int gpioSetPWMrange(unsigned pin, unsigned range);
+int gpioGetPWMrange(unsigned pin);
+int gpioGetPWMrealRange(unsigned pin);
+int gpioSetPWMfrequency(unsigned pin, unsigned frequency);
+int gpioGetPWMfrequency(unsigned pin);
+int gpioServo(unsigned pin, unsigned val);
+int gpioGetServoPulsewidth(unsigned pin);
+#endif // (GPIODEV_PINOUT == PINOUT_RPI)
+
 #ifdef __cplusplus
 }
 #endif

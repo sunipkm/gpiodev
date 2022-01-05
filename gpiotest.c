@@ -99,7 +99,7 @@ int main()
             int mode = gpioGetMode(_idx);
             if (mode < 0)
                 mode = 5;
-            printf("GPIO: %d Mode %s Value %d\n", idx, modestr[mode], gpioRead(_idx));
+            printf("\nGPIO: %d | Mode %s | Value %d\n", idx, modestr[mode], gpioRead(_idx));
             if (mode == GPIO_OUT)
                 printf("[s]elect GPIO, [i]nput mode, set [h]igh, set [l]ow, [q]uit: ");
             else

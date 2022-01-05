@@ -18,6 +18,20 @@
 #include "gpiodev.h"
 #undef GPIODEV_INTERNAL
 
+#ifdef eprintf
+#undef eprintf
+#endif
+/**
+ * @brief Wrapper to print a string to stderr with printf like arg support. Prepends provided string with the function from which it is called
+ * and line number by default, and appends a newline.
+ * 
+ */
+#define eprintf(str, ...)                                                        \
+    {                                                                            \
+        fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
+        fflush(stderr);                                                          \
+    }
+
 static gpioprops gpio_props_dev;                    /// Memory allocation for the GPIO properties struct
 static gpiopins gpio_pins_dev;                      /// Memory allocation for the GPIO pins struct
 static pthread_t *gpio_irq_threads;                 /// Memory allocation for IRQ threads

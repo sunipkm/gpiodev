@@ -3,6 +3,12 @@
 #include <unistd.h>
 #include "gpiodev.h"
 
+#define eprintf(str, ...)                                                        \
+    {                                                                            \
+        fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
+        fflush(stderr);                                                          \
+    }
+
 volatile sig_atomic_t done = 0;
 void sig_handler(int sig)
 {

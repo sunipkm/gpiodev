@@ -3,6 +3,12 @@
 #include <unistd.h>
 #include "gpiodev.h"
 
+#define eprintf(str, ...)                                                        \
+    {                                                                            \
+        fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
+        fflush(stderr);                                                          \
+    }
+
 volatile sig_atomic_t done = 0;
 void sig_handler(int sig)
 {
@@ -30,9 +36,9 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
-    signal(SIGINT, &sig_handler); // set up signal handler
+    signal(SIGINT, &sig_handler);                                        // set up signal handler
     gpioRegisterIRQ(pin, GPIO_IRQ_RISE, &gpio_callback, &counter, 1000); // register pin 11 as IRQ on rising edge, 1 second timeout
-    while(!done)
+    while (!done)
     {
         sleep(1);
     }

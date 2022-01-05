@@ -78,18 +78,6 @@ enum GPIO_PUD
     GPIO_PUD_UP,   //!< Set pin as pull up
 };
 
-#ifndef eprintf
-/**
- * @brief Wrapper to print a string to stderr with printf like arg support. Prepends provided string with the function from which it is called
- * and line number by default, and appends a newline.
- * 
- */
-#define eprintf(str, ...)                                                        \
-    {                                                                            \
-        fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
-        fflush(stderr);                                                          \
-    }
-#endif
 /**
  * @brief IRQ callback function of form void func(void *ptr). ptr points to the location of any input parameter/struct
  * 
@@ -262,6 +250,12 @@ typedef struct
 
 /**
  * @brief Set mode of GPIO Pins.
+ * Note: If the pin was already exported 
+ * (e.g. by some job on boot, or some 
+ * previous program that did not unexport
+ * the pin), the pin state is reverted
+ * to that mode and value on exit of
+ * the program using gpiodev.
  * 
  * @param pin of type int, corresponds to the LUT index
  * @param mode of type enum GPIO_MODE
@@ -270,10 +264,16 @@ typedef struct
  */
 int gpioSetMode(int pin, enum GPIO_MODE mode);
 /**
- * @brief Get the current mode of pin
+ * @brief Get the current mode of pin.
+ * If the pin is not initialized, it is either
+ * 1. Opened in the default mode (input) or
+ * 2. If the pin was exported prior (such as 
+ * by a job on boot that sets the pin to a specific
+ * output state), it opens the pin for access
+ * and does not change the value.
  * 
  * @param pin GPIO pin
- * @return int Mode of GPIO pin. -1 for uninitialized.
+ * @return int Mode of GPIO pin.
  */
 int gpioGetMode(int pin);
 /**

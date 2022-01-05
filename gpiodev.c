@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
 #define GPIODEV_INTERNAL
 #include "gpiodev.h"
@@ -21,6 +22,7 @@ static gpioprops gpio_props_dev;                    /// Memory allocation for th
 static gpiopins gpio_pins_dev;                      /// Memory allocation for the GPIO pins struct
 static pthread_t *gpio_irq_threads;                 /// Memory allocation for IRQ threads
 static gpio_irq_params *irq_params;                 /// Memory allocation for IRQ params
+static gpio_init_vals gpio_pins_init;               /// Memory allocation for GPIO init params
 static volatile int fdmem = -1;                     /// Memory allocation for /dev/mem
 static volatile uint32_t *gpio_reg = MAP_FAILED;    /// Memory allocation for GPIO register base pointer
 static volatile uint32_t *syst_reg = MAP_FAILED;    /// Memory allocation for system register (for gpio delay)
@@ -73,6 +75,8 @@ int gpioInitialize(void)
     memset(gpio_props_dev.pud, 0x0, sizeof(uint8_t)); // initiate as pull up turned off
     gpio_irq_threads = (pthread_t *)malloc(NUM_GPIO_PINS * sizeof(pthread_t));
     irq_params = (gpio_irq_params *)malloc(NUM_GPIO_PINS * sizeof(gpio_irq_params));
+    gpio_pins_init.mode = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
+    gpio_pins_init.val = (int *)malloc(NUM_GPIO_PINS * sizeof(int));
 
     gpio_pins_dev.fd = gpio_props_dev.fd_val; // copy the value file descriptor array for access by gpioRead/gpioWrite
     gpio_pins_dev.mode = (gpio_props_dev.mode);
@@ -82,6 +86,8 @@ int gpioInitialize(void)
         gpio_props_dev.fd_mode[i] = -1;
         gpio_props_dev.fd_val[i] = -1;
         gpio_props_dev.mode[i] = -1;
+        gpio_pins_init.mode[i] = -1;
+        gpio_pins_init.val[i] = -1;
     }
     int fd;
     fd = open("/sys/class/gpio/export", O_WRONLY);
@@ -103,7 +109,7 @@ int gpioInitialize(void)
 #ifdef GPIODEBUG
     eprintf("GPIO revision: 0x%x", rev);
 #else
-    ((void) rev);
+    ((void)rev);
 #endif
     if (pi_ispi) // if it is a pi
     {
@@ -143,6 +149,18 @@ cleanup:
     return -1;
 }
 
+static int GPIOCheckExport(int pin)
+{
+    char buf[256];
+    snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d", pin);
+    struct stat sb;
+    if (stat(buf, &sb) == 0 && S_ISDIR(sb.st_mode))
+    {
+        return 1;
+    }
+    return 0;
+}
+
 static int GPIOExport(int pin)
 {
 #define BUFFER_MAX 10
@@ -165,42 +183,95 @@ static int GPIOUnexport(int pin)
 
 int gpioSetMode(int pin, enum GPIO_MODE mode)
 {
+    // check if library has been initialized
     static char modestr[] = "in\0out";
     char path[256];
     int fd = -1;
+    int pin_exported = 0;
     if (gpio_initd == 0) // GPIO uninitialized
     {
         if (gpioInitialize() < 0)
             return -1;
         gpio_initd = 1; // Indicate that GPIO has been initialized
     }
+    // infer internal pin number
     int bcmpin = gpio_lut_pins[pin];
     if (bcmpin < 0)
     {
         fprintf(stderr, "GPIODEV: Error, pin %d is not available for GPIO operation.\n", pin);
         return -1;
     }
+    // check if requested mode is valid
     if (mode > GPIO_IRQ_BOTH)
     {
         fprintf(stderr, "GPIODEV: Error, mode is not valid for pin %d.\n", pin);
     }
-    if (gpio_props_dev.fd_val[pin] > 0)
+    // check if pin is already open
+    if ((gpio_props_dev.fd_mode[pin] > 0) && (gpio_props_dev.fd_val[pin] > 0))
     {
-        goto set_mode; // override opening direction again
+        goto set_mode;
     }
+    // pin is not open, check if it has been exported
+    if (gpio_pins_init.mode[pin] == -1) // pin has not been checked
+    {
+        if (GPIOCheckExport(bcmpin)) // pin was opened in the system, store its state
+        {
+            pin_exported = 1;
+            goto get_mode; // get its mode
+        }
+    }
+    // export the pin if it is not open
     if (GPIOExport(bcmpin)) // pin export unsuccessful
         return -1;
 
+get_mode:
     if (gpio_props_dev.fd_mode[pin] < 0) // pin mode uninitialized
     {
         snprintf(path, 256, "/sys/class/gpio/gpio%d/direction", bcmpin); // Direction fd
-        fd = open(path, O_WRONLY);
+        fd = open(path, O_RDWR);
         if (fd == -1)
         {
             fprintf(stderr, "%s: Failed to open gpio %d direction for writing: %s\n", __func__, bcmpin, path);
             return (-1);
         }
         gpio_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
+    }
+    // read in pin mode on open
+    if (pin_exported)
+    {
+        char buf[4];
+        memset(buf, 0x0, sizeof(buf));
+        lseek(gpio_props_dev.fd_mode[pin], 0, SEEK_SET);
+        int rdsz = read(gpio_props_dev.fd_mode[pin], buf, 3); // 3 bytes at most
+        if (strncasecmp("in", buf, 2) == 0)
+        {
+            gpio_pins_init.mode[pin] = GPIO_IN;
+        }
+        else if (strncasecmp("out", buf, 3) == 0)
+        {
+            gpio_pins_init.mode[pin] = GPIO_OUT;
+        }
+        else
+        {
+            eprintf("Error: Read %s as init mode", buf);
+            return -1;
+        }
+    }
+    // open file for value access
+    if (gpio_props_dev.fd_val[pin] < 0)
+    {
+        snprintf(path, 256, "/sys/class/gpio/gpio%d/value", bcmpin);
+        fd = open(path, O_RDWR); // Open as read/write depending on mode
+        if (fd == -1)
+        {
+            fprintf(stderr, "%s: Failed to open gpio value for read/write: %s\n", __func__, path);
+            return (-1);
+        }
+        gpio_props_dev.fd_val[pin] = fd;
+    }
+    if (pin_exported)
+    {
+        gpio_pins_init.val[pin] = gpioRead(pin);
     }
 set_mode:
     if (write(gpio_props_dev.fd_mode[pin], &modestr[mode == GPIO_OUT ? 3 : 0], mode == GPIO_OUT ? 3 : 2) == -1) // default: in
@@ -209,26 +280,11 @@ set_mode:
         return (-1);
     }
     gpio_pins_dev.mode[pin] = mode; // save the mode in which the pin has been opened
-    // open file for value access
-    if (gpio_props_dev.fd_val[pin] < 0)
+    // read in pin value
+    gpio_props_dev.val[pin] = gpioRead(pin);
+    // for input
+    if (mode == GPIO_IN)
     {
-        snprintf(path, 256, "/sys/class/gpio/gpio%d/value", bcmpin);
-        fd = open(path, mode == GPIO_OUT ? O_WRONLY : O_RDONLY); // Open as read/write depending on mode
-        if (fd == -1)
-        {
-            fprintf(stderr, "%s: Failed to open gpio value for read/write: %s\n", __func__, path);
-            return (-1);
-        }
-        gpio_props_dev.fd_val[pin] = fd;
-    }
-    if (mode == GPIO_OUT)
-    {
-        gpio_props_dev.val[pin] = GPIO_LOW;
-        gpioWrite(pin, GPIO_LOW);
-    }
-    else if (mode == GPIO_IN)
-    {
-        gpio_props_dev.val[pin] = gpioRead(pin);
         // set up IRQ to none
         snprintf(path, 256, "/sys/class/gpio/gpio%d/edge", bcmpin);
         fd = open(path, O_WRONLY); // open as write
@@ -554,13 +610,19 @@ void gpioDestroy(void)
             pthread_cancel(gpio_irq_threads[i]);
         for (int i = 0; i < NUM_GPIO_PINS; i++)
         {
-            if (gpio_props_dev.fd_mode[i] >= 0) // if opened, close pins
+            if (gpio_props_dev.fd_mode[i] >= 0) // if opened
             {
-                if (gpio_props_dev.mode[i] == GPIO_OUT) // set pin to low if pin is output
+                if (gpio_pins_init.mode[i] >= 0) // pin was initialized before
+                {
+                    gpioSetMode(i, gpio_pins_init.mode[i]);
+                    gpioWrite(i, gpio_pins_init.val[i]);
+                }
+                else if (gpio_props_dev.mode[i] == GPIO_OUT) // set pin to low if pin is output and was not initialized
                     gpioWrite(i, GPIO_LOW);
                 close(gpio_props_dev.fd_val[i]);
                 close(gpio_props_dev.fd_mode[i]);
-                GPIOUnexport(gpio_lut_pins[i]);
+                if (gpio_pins_init.mode[i] < 0) // pin was not initialized before
+                    GPIOUnexport(gpio_lut_pins[i]);
             }
         }
         close(gpio_props_dev.fd_export);
@@ -569,6 +631,8 @@ void gpioDestroy(void)
         free(gpio_props_dev.fd_mode);
         free(gpio_props_dev.val);
         free(gpio_props_dev.mode);
+        free(gpio_pins_init.mode);
+        free(gpio_pins_init.val);
         free(gpio_irq_threads);
         free(irq_params);
 #if GPIODEV_SINGLE_INSTANCE > 0

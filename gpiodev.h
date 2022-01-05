@@ -252,6 +252,12 @@ typedef struct
     int tout_ms;                  // poll timeout
 } gpio_irq_params;
 
+typedef struct
+{
+    int *mode,  // pin mode when opened
+        *val;   // pin value when opened
+} gpio_init_vals;
+
 #endif // GPIODEV_INTERNAL
 
 /**

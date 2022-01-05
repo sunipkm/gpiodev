@@ -324,6 +324,11 @@ set_mode:
     return 1;
 }
 
+int gpioGetMode(int pin)
+{
+    return gpio_pins_dev.mode[pin];
+}
+
 int gpioRead(int pin)
 {
     char value_str[3];

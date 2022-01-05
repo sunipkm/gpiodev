@@ -270,6 +270,13 @@ typedef struct
  */
 int gpioSetMode(int pin, enum GPIO_MODE mode);
 /**
+ * @brief Get the current mode of pin
+ * 
+ * @param pin GPIO pin
+ * @return int Mode of GPIO pin. -1 for uninitialized.
+ */
+int gpioGetMode(int pin);
+/**
  * @brief Register GPIO Pin as interrupt
  * 
  * @param pin of type int, corresponds to the LUT index

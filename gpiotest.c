@@ -109,5 +109,6 @@ int main()
         }
         c = getchar();
     }
+    printf("\n\n");
     return 0;
 }

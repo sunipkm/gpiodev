@@ -181,10 +181,46 @@ static int GPIOUnexport(int pin)
     return (0);
 }
 
+static int GPIOReadMode(int pin)
+{
+    char buf[BUFFER_MAX];
+    ssize_t bytes_read;
+    if (gpio_props_dev.fd_mode[pin] < 0)
+        return -1;
+    memset(buf, 0x0, sizeof(buf));
+    lseek(gpio_props_dev.fd_mode[pin], 0, SEEK_SET);
+    bytes_read = read(gpio_props_dev.fd_mode[pin], buf, 3); // 3 bytes at most
+    if (strncasecmp("in", buf, 2) == 0)
+    {
+        return GPIO_IN;
+    }
+    else if (strncasecmp("out", buf, 3) == 0)
+    {
+        return GPIO_OUT;
+    }
+    else
+    {
+        eprintf("Error: Read %s as init mode", buf);
+    }
+    return -1;
+}
+
+static int GPIOWriteMode(int pin, int mode)
+{
+    static char modestr[] = "in\0out";
+    if (gpio_props_dev.fd_mode[pin] < 0)
+        return -1;
+    if (write(gpio_props_dev.fd_mode[pin], &modestr[mode == GPIO_OUT ? 3 : 0], mode == GPIO_OUT ? 3 : 2) == -1) // default: in
+    {
+        eprintf("Failed to set direction for pin %d!", pin);
+        return (-1);
+    }
+    return 1;
+}
+
 int gpioSetMode(int pin, enum GPIO_MODE mode)
 {
     // check if library has been initialized
-    static char modestr[] = "in\0out";
     char path[256];
     int fd = -1;
     int pin_exported = 0;
@@ -239,23 +275,7 @@ get_mode:
     // read in pin mode on open
     if (pin_exported)
     {
-        char buf[4];
-        memset(buf, 0x0, sizeof(buf));
-        lseek(gpio_props_dev.fd_mode[pin], 0, SEEK_SET);
-        int rdsz = read(gpio_props_dev.fd_mode[pin], buf, 3); // 3 bytes at most
-        if (strncasecmp("in", buf, 2) == 0)
-        {
-            gpio_pins_init.mode[pin] = GPIO_IN;
-        }
-        else if (strncasecmp("out", buf, 3) == 0)
-        {
-            gpio_pins_init.mode[pin] = GPIO_OUT;
-        }
-        else
-        {
-            eprintf("Error: Read %s as init mode", buf);
-            return -1;
-        }
+        gpio_pins_init.mode[pin] = GPIOReadMode(pin);
     }
     // open file for value access
     if (gpio_props_dev.fd_val[pin] < 0)
@@ -274,10 +294,12 @@ get_mode:
         gpio_pins_init.val[pin] = gpioRead(pin);
     }
 set_mode:
-    if (write(gpio_props_dev.fd_mode[pin], &modestr[mode == GPIO_OUT ? 3 : 0], mode == GPIO_OUT ? 3 : 2) == -1) // default: in
+    if (mode != GPIOReadMode(pin)) // default: in
     {
-        fprintf(stderr, "%s: Failed to set direction for pin %d!\n", __func__, bcmpin);
-        return (-1);
+        if (GPIOWriteMode(pin, mode) < 0)
+        {
+            return (-1);
+        }
     }
     gpio_pins_dev.mode[pin] = mode; // save the mode in which the pin has been opened
     // read in pin value

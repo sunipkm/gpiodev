@@ -149,10 +149,10 @@ cleanup:
     return -1;
 }
 
-static int GPIOCheckExport(int pin)
+static int GPIOCheckExport(int bcmpin)
 {
     char buf[256];
-    snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d", pin);
+    snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d", bcmpin);
     struct stat sb;
     if (stat(buf, &sb) == 0 && S_ISDIR(sb.st_mode))
     {
@@ -161,22 +161,22 @@ static int GPIOCheckExport(int pin)
     return 0;
 }
 
-static int GPIOExport(int pin)
+static int GPIOExport(int bcmpin)
 {
 #define BUFFER_MAX 10
     char buffer[BUFFER_MAX];
     ssize_t bytes_written;
 
-    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
+    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", bcmpin);
     bytes_written = write(gpio_props_dev.fd_export, buffer, bytes_written);
     return (0);
 }
 
-static int GPIOUnexport(int pin)
+static int GPIOUnexport(int bcmpin)
 {
     char buffer[BUFFER_MAX];
     ssize_t bytes_written;
-    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin);
+    bytes_written = snprintf(buffer, BUFFER_MAX, "%d", bcmpin);
     bytes_written = write(gpio_props_dev.fd_unexport, buffer, bytes_written);
     return (0);
 }
@@ -326,6 +326,77 @@ set_mode:
 
 int gpioGetMode(int pin)
 {
+    // check if library has been initialized
+    char path[256];
+    int fd = -1;
+    int pin_exported = 0;
+    if (gpio_initd == 0) // GPIO uninitialized
+    {
+        if (gpioInitialize() < 0)
+            return -1;
+        gpio_initd = 1; // Indicate that GPIO has been initialized
+    }
+    // infer internal pin number
+    int bcmpin = gpio_lut_pins[pin];
+    if (bcmpin < 0)
+    {
+        fprintf(stderr, "GPIODEV: Error, pin %d is not available for GPIO operation.\n", pin);
+        return -1;
+    }
+    // check if pin is already open
+    if ((gpio_props_dev.fd_mode[pin] > 0) && (gpio_props_dev.fd_val[pin] > 0))
+    {
+        goto ret;
+    }
+    // pin is not open, check if it has been exported
+    if (gpio_pins_init.mode[pin] == -1) // pin has not been checked
+    {
+        if (GPIOCheckExport(bcmpin)) // pin was opened in the system, store its state
+        {
+            pin_exported = 1;
+            goto get_mode; // get its mode
+        }
+    }
+    // export the pin if it is not open
+    if (GPIOExport(bcmpin)) // pin export unsuccessful
+        return -1;
+
+get_mode:
+    if (gpio_props_dev.fd_mode[pin] < 0) // pin mode uninitialized
+    {
+        snprintf(path, 256, "/sys/class/gpio/gpio%d/direction", bcmpin); // Direction fd
+        fd = open(path, O_RDWR);
+        if (fd == -1)
+        {
+            fprintf(stderr, "%s: Failed to open gpio %d direction for writing: %s\n", __func__, bcmpin, path);
+            return (-1);
+        }
+        gpio_props_dev.fd_mode[pin] = fd; // save the direction file descriptor
+    }
+    // read in pin mode on open
+    if (pin_exported)
+    {
+        gpio_pins_init.mode[pin] = GPIOReadMode(pin);
+    }
+    // open file for value access
+    if (gpio_props_dev.fd_val[pin] < 0)
+    {
+        snprintf(path, 256, "/sys/class/gpio/gpio%d/value", bcmpin);
+        fd = open(path, O_RDWR); // Open as read/write depending on mode
+        if (fd == -1)
+        {
+            fprintf(stderr, "%s: Failed to open gpio value for read/write: %s\n", __func__, path);
+            return (-1);
+        }
+        gpio_props_dev.fd_val[pin] = fd;
+    }
+    if (pin_exported)
+    {
+        gpio_pins_init.val[pin] = gpioRead(pin);
+    }
+    gpio_props_dev.mode[pin] = GPIOReadMode(pin);
+    gpio_props_dev.val[pin] = gpioRead(pin);
+ret:
     return gpio_pins_dev.mode[pin];
 }
 

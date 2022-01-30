@@ -28,7 +28,7 @@
  */
 #define eprintf(str, ...)                                                        \
     {                                                                            \
-        fprintf(stderr, "%s, %d: " str "\n", __func__, __LINE__, ##__VA_ARGS__); \
+        fprintf(stderr, "[%s/%s():%d] " str "\n", __FILE__, __func__, __LINE__, ##__VA_ARGS__); \
         fflush(stderr);                                                          \
     }
 
@@ -197,13 +197,18 @@ static int GPIOUnexport(int bcmpin)
 
 static int GPIOReadMode(int pin)
 {
-    char buf[BUFFER_MAX];
-    ssize_t bytes_read;
     if (gpio_props_dev.fd_mode[pin] < 0)
         return -1;
+    char buf[BUFFER_MAX];
+    ssize_t bytes_read;
     memset(buf, 0x0, sizeof(buf));
     lseek(gpio_props_dev.fd_mode[pin], 0, SEEK_SET);
     bytes_read = read(gpio_props_dev.fd_mode[pin], buf, 3); // 3 bytes at most
+    if (bytes_read < 1)
+    {
+        eprintf("Error reading gpio mode: errno %d", errno);
+        return -1;
+    }
     if (strncasecmp("in", buf, 2) == 0)
     {
         return GPIO_IN;

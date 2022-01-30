@@ -4,7 +4,7 @@ To overcome the issue of internal pin numbering that is different from header pi
 where pin 11 is internally called GPIO 17 etc), a look up table is defined in the header to allow for pin number 
 translation from physical pins to internal representation.
 
-For basic testing, three programs `gpiotest.out`, `irqtest.out` and `waittest.out` can be generated and run on a Raspberry Pi.
+For basic testing, four programs `gpiotest.out`, `irqtest.out`, `waittest.out` and `pulluptest.out` can be generated and run on a Raspberry Pi.
 
 For Raspberry Pi systems, functionality has been added to configure pullup/pulldown on input pins.
 
